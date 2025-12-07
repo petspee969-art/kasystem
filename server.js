@@ -9,8 +9,8 @@ const PORT = 3001;
 // Configuração básica da conexão (sem o banco inicialmente)
 const dbConfig = {
     host: 'localhost',
-    user: 'root',      // Altere se seu usuário for diferente
-    password: '',      // Altere se sua senha for diferente
+    user: 'root',      // Padrão do XAMPP
+    password: '',      // Padrão do XAMPP (vazio)
     dateStrings: true,
     multipleStatements: true
 };
@@ -89,9 +89,10 @@ const INIT_SQL = `
         value JSON
     );
 
-    -- Inserir usuário Admin padrão se não existir
-    INSERT IGNORE INTO users (id, name, username, password, role) 
-    VALUES ('1', 'Administrador', 'admin', 'admin', 'admin');
+    -- GARANTE QUE O ADMIN EXISTA COM A SENHA CORRETA
+    INSERT INTO users (id, name, username, password, role) 
+    VALUES ('1', 'Administrador', 'admin', 'admin', 'admin')
+    ON DUPLICATE KEY UPDATE password = 'admin', role = 'admin';
 `;
 
 async function initDB() {
@@ -101,7 +102,8 @@ async function initDB() {
         
         console.log('🔄 Verificando banco de dados...');
         await connection.query(INIT_SQL);
-        console.log('✅ Banco de dados e tabelas verificados/criados com sucesso!');
+        console.log('✅ Banco de dados configurado.');
+        console.log('✅ Usuário ADMIN garantido (Login: admin / Senha: admin)');
         
         await connection.end();
 
@@ -113,7 +115,7 @@ async function initDB() {
 
     } catch (err) {
         console.error('❌ ERRO CRÍTICO NO BANCO DE DADOS:', err.message);
-        console.error('👉 Verifique se o MySQL está rodando e se o usuário/senha no arquivo server.js estão corretos.');
+        console.error('👉 Verifique se o MySQL (XAMPP) está rodando.');
     }
 }
 

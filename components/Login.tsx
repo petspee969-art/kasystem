@@ -19,14 +19,28 @@ const Login: React.FC<Props> = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
+    // Remove espaços em branco acidentais
+    const cleanUser = username.trim();
+    const cleanPass = password.trim();
+
     try {
       const users = await getUsers();
-      const validUser = users.find(u => u.username === username && u.password === password);
+      
+      if (!Array.isArray(users)) {
+          throw new Error("Resposta inválida do servidor.");
+      }
+
+      const validUser = users.find(u => u.username === cleanUser && u.password === cleanPass);
       
       if (validUser) {
         onLogin(validUser);
       } else {
-        setError('Credenciais inválidas. Verifique usuário e senha.');
+        setError(
+            <span>
+                Credenciais inválidas. <br/>
+                Tente <strong>admin</strong> / <strong>admin</strong>
+            </span>
+        );
       }
     } catch (err: any) {
       console.error(err);
@@ -74,7 +88,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Digite seu usuário"
+                placeholder="Digite seu usuário (ex: admin)"
                 disabled={loading}
               />
             </div>
