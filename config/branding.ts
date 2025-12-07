@@ -6,7 +6,7 @@ export const BRANDING = {
   appName: "Fábrica System",
   
   // Nome da empresa (usado em relatórios impressos e rodapés)
-  companyName: "Minha Confecção Ltda",
+  companyName: "Kavin's",
   
   // Slogan ou subtítulo da tela de login
   tagline: "Sistema Integrado de Gestão Têxtil",
@@ -18,6 +18,7 @@ export const BRANDING = {
   // Exemplo: "https://minhaempresa.com/logo.png"
   logoUrl: "", 
   
-  // Cores principais (para referência futura ou injeção de estilo)
-  primaryColor: "#2563eb", // blue-600
+  // Cores principais (Hexadecimal)
+  // Ex: Azul (#2563eb), Roxo (#7e22ce), Vermelho (#dc2626), Preto (#111827)
+  primaryColor: "#2563eb", 
 };

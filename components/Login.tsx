@@ -80,11 +80,14 @@ const Login: React.FC<Props> = ({ onLogin }) => {
           {BRANDING.logoUrl ? (
              <img src={BRANDING.logoUrl} alt={BRANDING.appName} className="h-16 mx-auto mb-4 object-contain" />
           ) : (
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+            <div 
+                className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4"
+                style={{ backgroundColor: `${BRANDING.primaryColor}20`, color: BRANDING.primaryColor }} // 20 é alpha (transparência)
+            >
                <BrandIcon className="w-8 h-8" />
             </div>
           )}
-          <h1 className="text-3xl font-bold text-blue-900">{BRANDING.appName}</h1>
+          <h1 className="text-3xl font-bold" style={{ color: BRANDING.primaryColor }}>{BRANDING.appName}</h1>
           <p className="text-gray-500 mt-2">{BRANDING.tagline}</p>
         </div>
 
@@ -102,7 +105,8 @@ const Login: React.FC<Props> = ({ onLogin }) => {
               <input
                 type="text"
                 required
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 outline-none transition"
+                style={{ '--tw-ring-color': BRANDING.primaryColor } as React.CSSProperties} // Hack para focus ring na cor da marca
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Digite seu usuário"
@@ -118,7 +122,8 @@ const Login: React.FC<Props> = ({ onLogin }) => {
               <input
                 type="password"
                 required
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 outline-none transition"
+                style={{ '--tw-ring-color': BRANDING.primaryColor } as React.CSSProperties}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -130,7 +135,8 @@ const Login: React.FC<Props> = ({ onLogin }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition duration-200 shadow-md flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full text-white py-3 rounded-lg font-semibold shadow-md flex justify-center items-center disabled:opacity-70 disabled:cursor-not-allowed hover:brightness-90 transition-all"
+            style={{ backgroundColor: BRANDING.primaryColor }}
           >
             {loading ? <Loader2 className="animate-spin w-5 h-5 mr-2" /> : 'Entrar no Sistema'}
           </button>

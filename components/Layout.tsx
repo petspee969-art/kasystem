@@ -17,19 +17,25 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
 
   const isAdmin = user.role === Role.ADMIN;
 
-  const NavItem = ({ id, icon: Icon, label }: { id: string; icon: any; label: string }) => (
-    <button
-      onClick={() => { setActiveTab(id); setMobileMenuOpen(false); }}
-      className={`flex items-center w-full px-4 py-3 mb-2 rounded-lg transition-colors ${
-        activeTab === id 
-          ? 'bg-blue-600 text-white shadow-md' 
-          : 'text-gray-600 hover:bg-gray-100'
-      }`}
-    >
-      <Icon className="w-5 h-5 mr-3" />
-      <span className="font-medium">{label}</span>
-    </button>
-  );
+  const NavItem = ({ id, icon: Icon, label }: { id: string; icon: any; label: string }) => {
+    const isActive = activeTab === id;
+    return (
+      <button
+        onClick={() => { setActiveTab(id); setMobileMenuOpen(false); }}
+        className={`flex items-center w-full px-4 py-3 mb-2 rounded-lg transition-colors ${
+          isActive 
+            ? 'text-white shadow-md' 
+            : 'text-gray-600 hover:bg-gray-100'
+        }`}
+        style={{ 
+            backgroundColor: isActive ? BRANDING.primaryColor : 'transparent' 
+        }}
+      >
+        <Icon className="w-5 h-5 mr-3" />
+        <span className="font-medium">{label}</span>
+      </button>
+    );
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -39,10 +45,15 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
           {BRANDING.logoUrl ? (
              <img src={BRANDING.logoUrl} className="h-8 w-8 object-contain" alt="Logo" />
           ) : (
-             <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><BRANDING.DefaultIcon className="w-5 h-5" /></div>
+             <div 
+                className="p-1.5 rounded-lg text-white"
+                style={{ backgroundColor: BRANDING.primaryColor }}
+             >
+                 <BRANDING.DefaultIcon className="w-5 h-5" />
+             </div>
           )}
           <div>
-            <h1 className="text-lg font-bold text-blue-800 leading-tight">{BRANDING.appName}</h1>
+            <h1 className="text-lg font-bold leading-tight" style={{ color: BRANDING.primaryColor }}>{BRANDING.appName}</h1>
             <p className="text-xs text-gray-500 mt-0.5 truncate w-32">Olá, {user.name.split(' ')[0]}</p>
           </div>
         </div>
@@ -83,7 +94,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
       <div className="md:hidden fixed w-full bg-white z-20 border-b flex justify-between items-center p-4 shadow-sm no-print">
         <div className="flex items-center gap-2">
            {BRANDING.logoUrl && <img src={BRANDING.logoUrl} className="h-6 w-6 object-contain" alt="Logo" />}
-           <h1 className="font-bold text-blue-800 text-lg">{BRANDING.appName}</h1>
+           <h1 className="font-bold text-lg" style={{ color: BRANDING.primaryColor }}>{BRANDING.appName}</h1>
         </div>
         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2">
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
