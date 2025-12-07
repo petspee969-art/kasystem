@@ -28,7 +28,8 @@ const handleResponse = async (res: Response) => {
 // --- USERS ---
 export const getUsers = async (): Promise<User[]> => {
   const res = await fetch(`${API_URL}/users`);
-  return handleResponse(res);
+  const data = await handleResponse(res);
+  return Array.isArray(data) ? data.filter((u: any) => u && u.id) : [];
 };
 
 export const addUser = async (user: User): Promise<void> => {
@@ -48,8 +49,11 @@ export const getProducts = async (): Promise<ProductDef[]> => {
   const res = await fetch(`${API_URL}/products`);
   const data = await handleResponse(res);
   
+  if (!Array.isArray(data)) return [];
+
   // Mapeamento snake_case (banco) -> camelCase (app)
-  return data?.map((p: any) => ({
+  // Adicionado .filter(p => p) para evitar crash se vier null
+  return data.filter((p: any) => p).map((p: any) => ({
     id: p.id,
     reference: p.reference,
     color: p.color,
@@ -57,7 +61,7 @@ export const getProducts = async (): Promise<ProductDef[]> => {
     stock: p.stock || {}, 
     enforceStock: !!p.enforce_stock,
     basePrice: typeof p.base_price === 'string' ? parseFloat(p.base_price) : (p.base_price || 0)
-  })) as ProductDef[] || [];
+  })) as ProductDef[];
 };
 
 export const addProduct = async (prod: ProductDef): Promise<void> => {
@@ -318,9 +322,6 @@ const formatOrder = (row: any): Order => {
     }
     
     // CORREÇÃO CRÍTICA DE DATA:
-    // O MySQL retorna datas como "YYYY-MM-DD HH:mm:ss" (com espaço).
-    // O Frontend espera formato ISO "YYYY-MM-DDTHH:mm:ss" (com T).
-    // Se não tiver T e tiver espaço, substituímos.
     let createdAt = row.created_at || row.createdAt;
     if (createdAt && typeof createdAt === 'string' && createdAt.includes(' ') && !createdAt.includes('T')) {
         createdAt = createdAt.replace(' ', 'T');
@@ -354,7 +355,8 @@ const formatOrder = (row: any): Order => {
 export const getOrders = async (): Promise<Order[]> => {
     const res = await fetch(`${API_URL}/orders`);
     const data = await handleResponse(res);
-    return data.map(formatOrder);
+    // Filtro para garantir que não existam linhas vazias
+    return Array.isArray(data) ? data.filter((row: any) => row && row.id).map(formatOrder) : [];
 };
 
 const checkRomaneioExists = async (romaneio: string, excludeOrderId?: string): Promise<boolean> => {
@@ -373,22 +375,19 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
       if (exists) throw new Error(`O Romaneio nº ${order.romaneio} já existe.`);
   }
 
-  // 1. Sequencial do ID (Gerado via tabela app_config no backend)
-  let newSeq = 1; // Padrão agora começa em 1
+  // 1. Sequencial do ID
+  let newSeq = 1;
   try {
-      // Get current seq
       const confRes = await fetch(`${API_URL}/config/order_seq`);
       const confData = await handleResponse(confRes);
       
       if (confData && confData.value !== undefined && confData.value !== null) {
-          // Garante que é número para evitar erro de string concatenation (ex: "1001" + 1 = "10011")
           const currentVal = parseInt(String(confData.value), 10);
           if (!isNaN(currentVal)) {
               newSeq = currentVal + 1;
           }
       }
       
-      // Update seq
       await fetch(`${API_URL}/config`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -397,11 +396,9 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
 
   } catch (err) {
     console.warn("Usando fallback de ID para pedido.", err);
-    // Se der erro, usa fallback mas garante que seja numérico
     newSeq = Math.floor(Date.now() / 1000) % 100000;
   }
 
-  // Garante que displayId nunca seja nulo
   if (!newSeq || isNaN(newSeq)) newSeq = 1;
 
   const orderWithSeq = { ...order, displayId: newSeq };

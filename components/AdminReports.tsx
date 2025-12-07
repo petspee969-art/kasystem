@@ -17,87 +17,81 @@ const AdminReports: React.FC = () => {
   // Filters
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 90); // Ampliado para 90 dias atrás
+    d.setDate(d.getDate() - 90);
     return d.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => {
-      // Data de hoje + 1 dia para garantir fuso horário
       const d = new Date();
       d.setDate(d.getDate() + 1);
       return d.toISOString().split('T')[0];
   });
   const [selectedRepId, setSelectedRepId] = useState('');
-  
-  // PADRÃO ALTERADO: Começa exibindo apenas 'open' (A Produzir)
-  // Isso resolve a sensação de "não zerar" quando finaliza. Se finalizou, sai da lista de produção.
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'finalized'>('open');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      const [o, u, p] = await Promise.all([getOrders(), getUsers(), getProducts()]);
-      setOrders(o);
-      setReps(u.filter(x => x.role === Role.REP));
-      setProducts(p);
-      setLoading(false);
+      try {
+        const [o, u, p] = await Promise.all([getOrders(), getUsers(), getProducts()]);
+        setOrders(o);
+        // Filtro defensivo para garantir que 'x' existe
+        setReps(u.filter(x => x && x.role === Role.REP));
+        setProducts(p);
+      } catch (error) {
+        console.error("Erro ao carregar relatório:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, []);
 
   // Filter Logic
   const filteredOrders = orders.filter(o => {
-    const d = o.createdAt.split('T')[0];
+    if (!o) return false;
+    const d = o.createdAt ? o.createdAt.split('T')[0] : '';
     const matchDate = d >= startDate && d <= endDate;
     const matchRep = selectedRepId ? o.repId === selectedRepId : true;
     
-    // Filtro de Status/Romaneio
     let matchStatus = true;
     if (statusFilter === 'open') {
-        matchStatus = !o.romaneio; // A Romanear (Aberto)
+        matchStatus = !o.romaneio;
     } else if (statusFilter === 'finalized') {
-        matchStatus = !!o.romaneio; // Romaneados (Finalizado)
+        matchStatus = !!o.romaneio;
     }
 
     return matchDate && matchRep && matchStatus;
   });
 
-  // Get Selected Rep Name for Printing
-  const selectedRepName = selectedRepId ? reps.find(r => r.id === selectedRepId)?.name : '';
+  // Get Selected Rep Name for Printing (Safe Find)
+  const selectedRep = reps.find(r => r && r.id === selectedRepId);
+  const selectedRepName = selectedRep ? selectedRep.name : '';
 
   // --- LÓGICA DE QUANTIDADE ---
   const getRelevantQty = (item: OrderItem, order: Order, size?: string): number => {
-      const sizesObj = item.sizes || {}; // Proteção contra undefined
+      const sizesObj = item.sizes || {}; 
 
-      // SE O PEDIDO JÁ TEM ROMANEIO (Finalizado ou Parcial):
       if (order.romaneio) {
           if (size) return sizesObj[size] || 0;
           return (Object.values(sizesObj) as number[]).reduce((a, b) => a + (b || 0), 0);
       }
       
-      // SE O PEDIDO ESTÁ ABERTO (A Romanear):
       if (size) return sizesObj[size] || 0;
       return item.totalQty || (Object.values(sizesObj) as number[]).reduce((a, b) => a + (b || 0), 0);
   };
 
   // --- AGGREGATIONS ---
-
-  // 1. Matriz de Corte (Production Matrix)
   const matrixData: Record<string, { ref: string, color: string, sizes: Record<string, number>, total: number }> = {};
-  
-  // 2. Totais Gerais
   let totalRevenueCost = 0; 
   let totalPiecesCount = 0;
-
-  // 3. Size Distribution (Curve)
   const sizeDist: Record<string, number> = {};
 
   filteredOrders.forEach(o => {
       if (!o.items || !Array.isArray(o.items)) return;
 
       o.items.forEach(item => {
-          if (!item.reference || !item.color) return;
+          if (!item || !item.reference || !item.color) return;
 
-          // MATRIZ DE CORTE
           const key = `${item.reference.trim()}__${item.color.trim()}`;
           if (!matrixData[key]) {
               matrixData[key] = {
@@ -108,18 +102,16 @@ const AdminReports: React.FC = () => {
               };
           }
 
-          // Busca Custo Base do Produto
-          const catalogProduct = products.find(p => p.reference === item.reference && p.color === item.color);
+          // Busca Custo Base com Proteção
+          const catalogProduct = products.find(p => p && p.reference === item.reference && p.color === item.color);
           const baseCost = catalogProduct ? catalogProduct.basePrice : 0;
 
-          // Qtd Total deste item para este pedido
           const qty = getRelevantQty(item, o);
           
           matrixData[key].total += qty;
           totalPiecesCount += qty;
           totalRevenueCost += (qty * baseCost);
 
-          // Distribuição por Tamanho
           ALL_POSSIBLE_SIZES.forEach(s => {
               const sizeQty = getRelevantQty(item, o, s);
               if (sizeQty > 0) {
@@ -132,7 +124,6 @@ const AdminReports: React.FC = () => {
 
   const matrixList = Object.values(matrixData).sort((a,b) => a.ref.localeCompare(b.ref));
 
-  // 4. Sales by Rep
   const repSales: Record<string, number> = {};
   const repPieces: Record<string, number> = {};
   
@@ -163,7 +154,6 @@ const AdminReports: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
-        {/* Header & Filters (No Print) */}
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 no-print">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                 <div>
@@ -183,7 +173,6 @@ const AdminReports: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                {/* Filtro de Status (Ajustado) */}
                 <div className={`p-3 rounded-lg border ${statusFilter === 'open' ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
                     <label className={`block text-xs font-bold mb-1 uppercase flex items-center ${statusFilter === 'open' ? 'text-orange-700' : 'text-green-700'}`}>
                         <Truck className="w-3 h-3 mr-1" /> Situação
@@ -209,7 +198,10 @@ const AdminReports: React.FC = () => {
                             onChange={e => setSelectedRepId(e.target.value)}
                         >
                             <option value="">Todos</option>
-                            {reps.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                            {reps.map(r => (
+                                // Verificação defensiva: só renderiza se r e r.id existirem
+                                (r && r.id) ? <option key={r.id} value={r.id}>{r.name}</option> : null
+                            ))}
                         </select>
                     </div>
                 </div>
@@ -247,7 +239,6 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* PRINT HEADER ONLY */}
         <div className="hidden print-only mb-8 text-center border-b-2 border-black pb-4">
             <h1 className="text-3xl font-bold uppercase">
                 {statusFilter === 'open' ? 'Matriz de Corte (A Produzir)' : statusFilter === 'finalized' ? 'Relatório de Produção (Realizado)' : 'Relatório Geral'}
@@ -259,7 +250,6 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-l-4 border-l-green-500 border-gray-100">
                 <p className="text-sm font-bold text-gray-500 uppercase mb-1">Custo Total Est. (Matéria Prima)</p>
@@ -284,9 +274,7 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* CHARTS ROW */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 break-inside-avoid">
-            {/* Sales by Rep */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center">
                     <Users className="w-5 h-5 mr-2 text-blue-600" /> Vendas por Rep (R$)
@@ -308,7 +296,6 @@ const AdminReports: React.FC = () => {
                 </div>
             </div>
 
-            {/* Size Distribution */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center">
                     <Shirt className="w-5 h-5 mr-2 text-purple-600" /> Curva de Tamanhos
@@ -327,7 +314,6 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* PRODUCTION MATRIX TABLE */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden break-before-page">
             <div className={`p-6 border-b border-gray-200 flex justify-between items-center ${statusFilter === 'open' ? 'bg-orange-50' : 'bg-gray-50'}`}>
                 <div>
@@ -388,7 +374,6 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* PRINT FOOTER */}
         <div className="hidden print-only mt-8 text-center text-sm text-gray-500">
             <p>Relatório gerado em {new Date().toLocaleString()}</p>
             <p>Sistema Confecção Pro</p>
