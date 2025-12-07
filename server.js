@@ -2,7 +2,6 @@
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
-import bodyParser from 'body-parser';
 
 const app = express();
 const PORT = 3001;
@@ -13,20 +12,23 @@ const dbConfig = {
     user: 'root',      // Altere conforme seu usuário MySQL
     password: '',      // Altere conforme sua senha MySQL
     database: 'confeccao_db',
-    dateStrings: true // Importante para datas retornarem como string
+    dateStrings: true  // Importante para datas retornarem como string
 };
 
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json()); // Substitui o body-parser antigo
 
 let pool;
 
 async function connectDB() {
     try {
         pool = mysql.createPool(dbConfig);
-        console.log('Conectado ao MySQL');
+        // Teste simples de conexão
+        const connection = await pool.getConnection();
+        console.log('✅ Conectado ao MySQL com sucesso!');
+        connection.release();
     } catch (err) {
-        console.error('Erro ao conectar ao MySQL:', err);
+        console.error('❌ Erro ao conectar ao MySQL:', err.message);
     }
 }
 
@@ -275,5 +277,5 @@ app.post('/api/config', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server rodando em http://localhost:${PORT}`);
+    console.log(`🚀 Servidor Backend rodando em http://localhost:${PORT}`);
 });
