@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
 import { Package, Clock, CheckCircle, Search, Eye, X, Loader2, Printer, CheckCheck } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 interface Props {
   user: User;
@@ -42,32 +43,18 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
 
     const itemsHtml = order.items.map(item => {
         // CÁLCULO DINÂMICO DO TOTAL DA LINHA
-        // CORREÇÃO: Se tem Romaneio ou é Parcial, usamos 'sizes' pois é o pedido consolidado.
-        
         const isFinalized = !!order.romaneio || !!order.isPartial;
 
         let rowTotal = 0;
         const cellsHtml = ALL_SIZES.map(s => {
             let numVal = 0;
-            
-            // Lógica Unificada com Admin:
-            // O campo 'sizes' contém o que foi efetivamente faturado no pedido (seja parcial ou completo).
-            // Ignoramos 'picked' na impressão final, pois 'picked' é controle de processo de separação.
             numVal = (item.sizes && item.sizes[s]) || 0;
-            
             rowTotal += numVal;
             return `<td class="text-center">${numVal > 0 ? numVal : '-'}</td>`;
         }).join('');
 
-        // SE O PEDIDO ESTÁ FINALIZADO E A QUANTIDADE DESTA LINHA É 0, NÃO EXIBE NO PDF
-        if (isFinalized && rowTotal === 0) {
-            return '';
-        }
-
-        // Se a linha tiver total 0 mesmo não sendo finalizado (ex: item deletado logicamente), esconde
-        if (rowTotal === 0) {
-            return '';
-        }
+        if (isFinalized && rowTotal === 0) return '';
+        if (rowTotal === 0) return '';
 
         calculatedTotalPieces += rowTotal;
         const rowValue = rowTotal * item.unitPrice;
@@ -92,7 +79,6 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
     
     const finalTotal = calculatedSubtotal - discountAmount;
 
-    // Formata o label do desconto para mostrar a porcentagem (ex: "Desconto (10%)")
     const discountLabel = order.discountType === 'percentage' 
         ? `Desconto (${order.discountValue}%)` 
         : `Desconto (Fixo)`;
@@ -104,7 +90,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
     const html = `
       <html>
         <head>
-          <title>Pedido #${order.displayId}</title>
+          <title>Pedido #${order.displayId} - ${BRANDING.companyName}</title>
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
             @media print { 
@@ -118,6 +104,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
           </style>
         </head>
         <body class="bg-white text-black p-8">
+            <div class="text-center mb-2 text-xs text-gray-400 uppercase tracking-widest">${BRANDING.companyName}</div>
             <div class="flex justify-between border-b-2 border-black pb-4 mb-6">
                 <div>
                     <h1 class="text-3xl font-extrabold uppercase tracking-wider">
@@ -249,7 +236,6 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                 let totalPedido = order.totalPieces;
                 order.items.forEach(item => {
                     if (item.picked) {
-                        // Cast Object.values to number[] to avoid 'unknown' type errors
                         totalSeparado += (Object.values(item.picked) as number[]).reduce((a, b) => a + b, 0);
                     }
                 });
@@ -386,12 +372,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                                      let rowTotal = 0;
                                      ALL_SIZES.forEach(s => {
                                          let numVal = 0;
-                                         
-                                         // Correção de lógica: 
-                                         // Se é finalizado/parcial, a quantidade real está em 'sizes' (o pedido foi reescrito).
-                                         // Ignoramos 'picked' para pedidos finalizados pois 'picked' é um estado transiente de separação.
                                          numVal = (item.sizes && item.sizes[s]) || 0;
-                                         
                                          rowTotal += numVal;
                                      });
                                      

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { getUsers } from '../services/storageService';
 import { Lock, User as UserIcon, Loader2, ServerCrash, Database, AlertCircle } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 interface Props {
   onLogin: (user: User) => void;
@@ -70,15 +71,21 @@ const Login: React.FC<Props> = ({ onLogin }) => {
     }
   };
 
+  const BrandIcon = BRANDING.DefaultIcon;
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
-            <UserIcon className="w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-bold text-blue-900">Confecção Pro</h1>
-          <p className="text-gray-500 mt-2">Sistema de Gestão de Pedidos</p>
+          {BRANDING.logoUrl ? (
+             <img src={BRANDING.logoUrl} alt={BRANDING.appName} className="h-16 mx-auto mb-4 object-contain" />
+          ) : (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4">
+               <BrandIcon className="w-8 h-8" />
+            </div>
+          )}
+          <h1 className="text-3xl font-bold text-blue-900">{BRANDING.appName}</h1>
+          <p className="text-gray-500 mt-2">{BRANDING.tagline}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -98,7 +105,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Digite seu usuário (ex: admin)"
+                placeholder="Digite seu usuário"
                 disabled={loading}
               />
             </div>

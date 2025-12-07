@@ -4,6 +4,7 @@ import { Order, User, Role, ProductDef, OrderItem } from '../types';
 import { getOrders, getUsers, getProducts } from '../services/storageService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell, PieChart, Pie } from 'recharts';
 import { Loader2, Calendar, Filter, Printer, Download, TrendingUp, Scissors, Users, Shirt, Truck, CheckCircle, Clock } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1'];
 const ALL_POSSIBLE_SIZES = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'];
@@ -248,6 +249,7 @@ const AdminReports: React.FC = () => {
                  <span>Status: {statusFilter === 'all' ? 'TODOS' : statusFilter === 'open' ? 'A ROMANEAR' : 'ROMANEADOS'}</span>
                  {selectedRepId && <span>Representante: {selectedRepName}</span>}
             </div>
+            <div className="mt-2 text-xs text-gray-400 uppercase tracking-widest">{BRANDING.companyName}</div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -376,7 +378,7 @@ const AdminReports: React.FC = () => {
 
         <div className="hidden print-only mt-8 text-center text-sm text-gray-500">
             <p>Relatório gerado em {new Date().toLocaleString()}</p>
-            <p>Sistema Confecção Pro</p>
+            <p>{BRANDING.appName} por {BRANDING.companyName}</p>
         </div>
     </div>
   );

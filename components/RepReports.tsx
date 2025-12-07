@@ -4,6 +4,7 @@ import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Loader2, Calendar, Search, Filter, Printer, ShoppingBag, DollarSign, Package, UserCheck, ClipboardList } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 interface Props {
   user: User;
@@ -198,6 +199,7 @@ const RepReports: React.FC<Props> = ({ user }) => {
             <h1 className="text-2xl font-bold uppercase">Relatório de Vendas - {user.name}</h1>
             <p className="text-sm mt-1">Período: {new Date(startDate).toLocaleDateString()} até {new Date(endDate).toLocaleDateString()}</p>
             {selectedClient && <p className="font-bold mt-2">Cliente: {selectedClient.name}</p>}
+            <p className="text-xs text-gray-400 uppercase mt-2">{BRANDING.companyName}</p>
         </div>
 
         {/* SUMMARY HEADER IF CLIENT SELECTED */}

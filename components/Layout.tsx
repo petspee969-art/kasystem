@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
 import { LogOut, LayoutDashboard, ShoppingCart, Users, Package, Shirt, Menu, X, DollarSign, FileBarChart, PieChart, Archive } from 'lucide-react';
+import { BRANDING } from '../config/branding';
 
 interface LayoutProps {
   user: User;
@@ -34,9 +35,16 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar Desktop */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 fixed h-full z-10 no-print">
-        <div className="p-6 border-b border-gray-100">
-          <h1 className="text-xl font-bold text-blue-800">Confecção Pro</h1>
-          <p className="text-sm text-gray-500 mt-1 truncate">Olá, {user.name.split(' ')[0]}</p>
+        <div className="p-6 border-b border-gray-100 flex items-center gap-3">
+          {BRANDING.logoUrl ? (
+             <img src={BRANDING.logoUrl} className="h-8 w-8 object-contain" alt="Logo" />
+          ) : (
+             <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><BRANDING.DefaultIcon className="w-5 h-5" /></div>
+          )}
+          <div>
+            <h1 className="text-lg font-bold text-blue-800 leading-tight">{BRANDING.appName}</h1>
+            <p className="text-xs text-gray-500 mt-0.5 truncate w-32">Olá, {user.name.split(' ')[0]}</p>
+          </div>
         </div>
         
         <nav className="flex-1 p-4 overflow-y-auto">
@@ -73,7 +81,10 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
 
       {/* Mobile Header */}
       <div className="md:hidden fixed w-full bg-white z-20 border-b flex justify-between items-center p-4 shadow-sm no-print">
-        <h1 className="font-bold text-blue-800 text-lg">Confecção Pro</h1>
+        <div className="flex items-center gap-2">
+           {BRANDING.logoUrl && <img src={BRANDING.logoUrl} className="h-6 w-6 object-contain" alt="Logo" />}
+           <h1 className="font-bold text-blue-800 text-lg">{BRANDING.appName}</h1>
+        </div>
         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2">
           {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
