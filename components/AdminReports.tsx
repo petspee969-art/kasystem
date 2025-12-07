@@ -17,13 +17,20 @@ const AdminReports: React.FC = () => {
   // Filters
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 90); // Ampliado para 90 dias atrás
     return d.toISOString().split('T')[0];
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => {
+      // Data de hoje + 1 dia para garantir fuso horário
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split('T')[0];
+  });
   const [selectedRepId, setSelectedRepId] = useState('');
-  // NOVO: Filtro de Status para separar Romaneados de A Romanear
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'finalized'>('all');
+  
+  // PADRÃO ALTERADO: Começa exibindo apenas 'open' (A Produzir)
+  // Isso resolve a sensação de "não zerar" quando finaliza. Se finalizou, sai da lista de produção.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'finalized'>('open');
 
   useEffect(() => {
     const load = async () => {
@@ -46,9 +53,9 @@ const AdminReports: React.FC = () => {
     // Filtro de Status/Romaneio
     let matchStatus = true;
     if (statusFilter === 'open') {
-        matchStatus = !o.romaneio; // A Romanear
+        matchStatus = !o.romaneio; // A Romanear (Aberto)
     } else if (statusFilter === 'finalized') {
-        matchStatus = !!o.romaneio; // Romaneados
+        matchStatus = !!o.romaneio; // Romaneados (Finalizado)
     }
 
     return matchDate && matchRep && matchStatus;
@@ -59,38 +66,39 @@ const AdminReports: React.FC = () => {
 
   // --- LÓGICA DE QUANTIDADE ---
   const getRelevantQty = (item: OrderItem, order: Order, size?: string): number => {
+      const sizesObj = item.sizes || {}; // Proteção contra undefined
+
       // SE O PEDIDO JÁ TEM ROMANEIO (Finalizado ou Parcial):
-      // A fonte da verdade é o campo 'sizes', pois o processo de finalização consolida o que foi separado dentro dele.
       if (order.romaneio) {
-          if (size) return item.sizes[size] || 0;
-          // Retorna a soma dos tamanhos em 'sizes'
-          return (Object.values(item.sizes) as number[]).reduce((a, b) => a + b, 0);
+          if (size) return sizesObj[size] || 0;
+          return (Object.values(sizesObj) as number[]).reduce((a, b) => a + (b || 0), 0);
       }
       
       // SE O PEDIDO ESTÁ ABERTO (A Romanear):
-      // Usa a projeção do pedido original (sizes)
-      // (Opcionalmente poderia usar 'picked' se quisesse ver o progresso, mas para relatório de produção futura usa-se o pedido)
-      if (size) return item.sizes[size] || 0;
-      return item.totalQty;
+      if (size) return sizesObj[size] || 0;
+      return item.totalQty || (Object.values(sizesObj) as number[]).reduce((a, b) => a + (b || 0), 0);
   };
 
   // --- AGGREGATIONS ---
 
   // 1. Matriz de Corte (Production Matrix)
-  // Agrupa por (Ref + Cor) e soma os tamanhos usando a lógica híbrida
   const matrixData: Record<string, { ref: string, color: string, sizes: Record<string, number>, total: number }> = {};
   
-  // 2. Totais Gerais (Baseados em Custo)
-  let totalRevenueCost = 0; // Faturamento Baseado no Custo
+  // 2. Totais Gerais
+  let totalRevenueCost = 0; 
   let totalPiecesCount = 0;
 
   // 3. Size Distribution (Curve)
   const sizeDist: Record<string, number> = {};
 
   filteredOrders.forEach(o => {
+      if (!o.items || !Array.isArray(o.items)) return;
+
       o.items.forEach(item => {
+          if (!item.reference || !item.color) return;
+
           // MATRIZ DE CORTE
-          const key = `${item.reference}__${item.color}`;
+          const key = `${item.reference.trim()}__${item.color.trim()}`;
           if (!matrixData[key]) {
               matrixData[key] = {
                   ref: item.reference,
@@ -104,7 +112,7 @@ const AdminReports: React.FC = () => {
           const catalogProduct = products.find(p => p.reference === item.reference && p.color === item.color);
           const baseCost = catalogProduct ? catalogProduct.basePrice : 0;
 
-          // Qtd Total deste item para este pedido (Híbrido)
+          // Qtd Total deste item para este pedido
           const qty = getRelevantQty(item, o);
           
           matrixData[key].total += qty;
@@ -124,14 +132,12 @@ const AdminReports: React.FC = () => {
 
   const matrixList = Object.values(matrixData).sort((a,b) => a.ref.localeCompare(b.ref));
 
-  // 4. Sales by Rep (Performance Financeira de Venda Real - Para gráfico)
-  // Mantemos o valor de VENDA aqui para o gráfico de performance comercial
+  // 4. Sales by Rep
   const repSales: Record<string, number> = {};
   const repPieces: Record<string, number> = {};
   
   filteredOrders.forEach(o => {
       const name = o.repName || 'Desconhecido';
-      // Para o gráfico de vendas, usamos o valor final do pedido (Venda), não custo
       repSales[name] = (repSales[name] || 0) + (o.finalTotalValue || 0);
       repPieces[name] = (repPieces[name] || 0) + o.totalPieces;
   });
@@ -165,7 +171,7 @@ const AdminReports: React.FC = () => {
                         <TrendingUp className="w-6 h-6 mr-2 text-blue-600" /> Relatórios de Produção & Custo
                     </h2>
                     <p className="text-gray-500 text-sm mt-1">
-                        Matriz de corte baseada em projeção (abertos) ou separação real (romaneados).
+                        Selecione "A Produzir" para ver o que falta cortar/separar. Selecione "Finalizados" para histórico.
                     </p>
                 </div>
                 <button 
@@ -177,19 +183,19 @@ const AdminReports: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                {/* Filtro de Status (NOVO) */}
-                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    <label className="block text-xs font-bold text-blue-700 mb-1 uppercase flex items-center">
-                        <Truck className="w-3 h-3 mr-1" /> Situação (Romaneio)
+                {/* Filtro de Status (Ajustado) */}
+                <div className={`p-3 rounded-lg border ${statusFilter === 'open' ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                    <label className={`block text-xs font-bold mb-1 uppercase flex items-center ${statusFilter === 'open' ? 'text-orange-700' : 'text-green-700'}`}>
+                        <Truck className="w-3 h-3 mr-1" /> Situação
                     </label>
                     <select 
                         className="w-full border rounded p-2 text-sm focus:ring-2 focus:ring-blue-500 bg-white font-medium text-gray-700"
                         value={statusFilter}
                         onChange={e => setStatusFilter(e.target.value as any)}
                     >
-                        <option value="all">Todos os Pedidos</option>
-                        <option value="open">A Romanear (Abertos)</option>
-                        <option value="finalized">Já Romaneados (Finalizados)</option>
+                        <option value="open">A Produzir (Abertos)</option>
+                        <option value="finalized">Já Produzidos (Finalizados)</option>
+                        <option value="all">Visão Geral (Tudo)</option>
                     </select>
                 </div>
 
@@ -235,15 +241,17 @@ const AdminReports: React.FC = () => {
             </div>
             
             <div className="mt-4 text-right pb-2 text-sm text-gray-500">
-                 Status Visualizado: <strong className="text-blue-600 uppercase">
-                    {statusFilter === 'all' ? 'Geral (Híbrido)' : statusFilter === 'open' ? 'Projeção (Pedidos Abertos)' : 'Realizado (Peças Separadas)'}
+                 Modo: <strong className="text-blue-600 uppercase">
+                    {statusFilter === 'all' ? 'Geral (Todos)' : statusFilter === 'open' ? 'PENDENTE DE PRODUÇÃO' : 'HISTÓRICO REALIZADO'}
                  </strong> • Exibindo <strong>{filteredOrders.length}</strong> pedidos.
             </div>
         </div>
 
         {/* PRINT HEADER ONLY */}
         <div className="hidden print-only mb-8 text-center border-b-2 border-black pb-4">
-            <h1 className="text-3xl font-bold uppercase">Relatório de Custo & Produção</h1>
+            <h1 className="text-3xl font-bold uppercase">
+                {statusFilter === 'open' ? 'Matriz de Corte (A Produzir)' : statusFilter === 'finalized' ? 'Relatório de Produção (Realizado)' : 'Relatório Geral'}
+            </h1>
             <p className="text-lg mt-2">Período: {new Date(startDate).toLocaleDateString()} até {new Date(endDate).toLocaleDateString()}</p>
             <div className="flex justify-center gap-4 mt-2 font-bold text-sm">
                  <span>Status: {statusFilter === 'all' ? 'TODOS' : statusFilter === 'open' ? 'A ROMANEAR' : 'ROMANEADOS'}</span>
@@ -254,22 +262,24 @@ const AdminReports: React.FC = () => {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-lg shadow-sm border border-l-4 border-l-green-500 border-gray-100">
-                <p className="text-sm font-bold text-gray-500 uppercase mb-1">Custo Total (Produtos)</p>
+                <p className="text-sm font-bold text-gray-500 uppercase mb-1">Custo Total Est. (Matéria Prima)</p>
                 <p className="text-3xl font-bold text-gray-900">R$ {totalRevenueCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 <div className="mt-2 text-xs flex items-center text-green-700 bg-green-50 p-1 rounded w-fit">
                     <CheckCircle className="w-3 h-3 mr-1" />
-                    Baseado no Preço de Custo
+                    Baseado no Custo de Cadastro
                 </div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-l-4 border-l-blue-500 border-gray-100">
-                <p className="text-sm font-bold text-gray-500 uppercase mb-1">Volume de Peças</p>
+            <div className={`bg-white p-6 rounded-lg shadow-sm border border-l-4 border-gray-100 ${statusFilter === 'open' ? 'border-l-orange-500' : 'border-l-blue-500'}`}>
+                <p className="text-sm font-bold text-gray-500 uppercase mb-1">
+                    {statusFilter === 'open' ? 'Peças a Produzir' : 'Peças Produzidas'}
+                </p>
                 <p className="text-3xl font-bold text-gray-900">{totalPiecesCount}</p>
-                <p className="text-xs text-blue-600 mt-1">
-                    {statusFilter === 'open' ? 'A produzir/separar' : statusFilter === 'finalized' ? 'Efetivamente separadas' : 'Mistura (Pedido + Separado)'}
+                <p className="text-xs text-gray-500 mt-1">
+                    {statusFilter === 'open' ? 'Soma dos pedidos abertos' : 'Soma dos romaneios'}
                 </p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm border border-l-4 border-l-purple-500 border-gray-100">
-                <p className="text-sm font-bold text-gray-500 uppercase mb-1">Total Pedidos</p>
+                <p className="text-sm font-bold text-gray-500 uppercase mb-1">Qtd. Pedidos</p>
                 <p className="text-3xl font-bold text-gray-900">{totalOrdersCount}</p>
             </div>
         </div>
@@ -279,7 +289,7 @@ const AdminReports: React.FC = () => {
             {/* Sales by Rep */}
             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center">
-                    <Users className="w-5 h-5 mr-2 text-blue-600" /> Performance Comercial (Valor Venda)
+                    <Users className="w-5 h-5 mr-2 text-blue-600" /> Vendas por Rep (R$)
                 </h3>
                 <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -317,19 +327,20 @@ const AdminReports: React.FC = () => {
             </div>
         </div>
 
-        {/* PRODUCTION MATRIX TABLE - THE "KILLER FEATURE" */}
+        {/* PRODUCTION MATRIX TABLE */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden break-before-page">
-            <div className="p-6 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <div className={`p-6 border-b border-gray-200 flex justify-between items-center ${statusFilter === 'open' ? 'bg-orange-50' : 'bg-gray-50'}`}>
                 <div>
                     <h3 className="font-bold text-lg text-gray-800 flex items-center">
-                        <Scissors className="w-5 h-5 mr-2 text-red-600" /> Matriz de Corte & Produção
+                        <Scissors className="w-5 h-5 mr-2 text-red-600" /> 
+                        {statusFilter === 'open' ? 'Matriz de Corte (A Produzir)' : 'Matriz Consolidada'}
                     </h3>
                     <p className="text-sm text-gray-500">
                         {statusFilter === 'open' 
-                         ? 'Projeção de produção baseada em pedidos abertos (Qtd Pedida).' 
+                         ? 'Lista do que precisa ser produzido/separado (Pedidos Abertos).' 
                          : statusFilter === 'finalized'
-                         ? 'Relatório de saída baseado em romaneios (Qtd Separada).'
-                         : 'Visão geral híbrida.'}
+                         ? 'Lista do que já foi despachado (Romaneios).'
+                         : 'Visão geral de tudo.'}
                     </p>
                 </div>
             </div>
@@ -360,7 +371,7 @@ const AdminReports: React.FC = () => {
                             </tr>
                         ))}
                         {matrixList.length === 0 && (
-                            <tr><td colSpan={10} className="p-8 text-center text-gray-400">Nenhum dado para o período selecionado.</td></tr>
+                            <tr><td colSpan={10} className="p-8 text-center text-gray-400">Nenhum dado encontrado para o filtro selecionado.</td></tr>
                         )}
                     </tbody>
                     <tfoot className="bg-gray-100 font-bold border-t-2 border-gray-300">

@@ -365,16 +365,18 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
   }
 
   // 1. Sequencial do ID (Gerado via tabela app_config no backend)
-  let newSeq = 1000;
+  let newSeq = 1; // Padrão agora começa em 1
   try {
       // Get current seq
       const confRes = await fetch(`${API_URL}/config/order_seq`);
       const confData = await handleResponse(confRes);
       
-      if (confData) {
-          newSeq = confData.value + 1;
-      } else {
-          newSeq = 1001;
+      if (confData && confData.value !== undefined && confData.value !== null) {
+          // Garante que é número para evitar erro de string concatenation (ex: "1001" + 1 = "10011")
+          const currentVal = parseInt(String(confData.value), 10);
+          if (!isNaN(currentVal)) {
+              newSeq = currentVal + 1;
+          }
       }
       
       // Update seq
@@ -386,8 +388,12 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
 
   } catch (err) {
     console.warn("Usando fallback de ID para pedido.", err);
+    // Se der erro, usa fallback mas garante que seja numérico
     newSeq = Math.floor(Date.now() / 1000) % 100000;
   }
+
+  // Garante que displayId nunca seja nulo
+  if (!newSeq || isNaN(newSeq)) newSeq = 1;
 
   const orderWithSeq = { ...order, displayId: newSeq };
 
