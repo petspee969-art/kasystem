@@ -317,6 +317,15 @@ const formatOrder = (row: any): Order => {
         try { items = JSON.parse(items); } catch(e) {}
     }
     
+    // CORREÇÃO CRÍTICA DE DATA:
+    // O MySQL retorna datas como "YYYY-MM-DD HH:mm:ss" (com espaço).
+    // O Frontend espera formato ISO "YYYY-MM-DDTHH:mm:ss" (com T).
+    // Se não tiver T e tiver espaço, substituímos.
+    let createdAt = row.created_at || row.createdAt;
+    if (createdAt && typeof createdAt === 'string' && createdAt.includes(' ') && !createdAt.includes('T')) {
+        createdAt = createdAt.replace(' ', 'T');
+    }
+
     return {
       ...row,
       id: row.id,
@@ -329,7 +338,7 @@ const formatOrder = (row: any): Order => {
       clientName: row.client_name || row.clientName,
       clientCity: row.client_city || row.clientCity,
       clientState: row.client_state || row.clientState,
-      createdAt: row.created_at || row.createdAt,
+      createdAt: createdAt,
       deliveryDate: row.delivery_date || row.deliveryDate,
       paymentMethod: row.payment_method || row.paymentMethod,
       status: row.status,

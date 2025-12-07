@@ -19,10 +19,15 @@ const RepReports: React.FC<Props> = ({ user }) => {
   // Filters
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 90); // Alterado para 90 dias (para garantir que dados mais antigos apareçam)
     return d.toISOString().split('T')[0];
   });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => {
+    // Data de hoje + 1 dia para evitar problemas de fuso horário onde o dia atual é cortado
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
   const [selectedClientId, setSelectedClientId] = useState('');
   const [searchTerm, setSearchTerm] = useState(''); // Filtra por ref ou cor
 
@@ -33,8 +38,11 @@ const RepReports: React.FC<Props> = ({ user }) => {
         getOrders(), 
         getClients(user.id)
       ]);
-      // Filter orders strictly for this rep
-      setOrders(allOrders.filter(o => o.repId === user.id));
+      
+      // Filtra pedidos para este representante (usando conversão para String para garantir segurança de tipos)
+      const myOrders = allOrders.filter(o => String(o.repId) === String(user.id));
+      
+      setOrders(myOrders);
       setClients(allClients);
       setLoading(false);
     };
@@ -43,8 +51,10 @@ const RepReports: React.FC<Props> = ({ user }) => {
 
   // --- FILTER LOGIC ---
   const filteredOrders = orders.filter(o => {
-    const d = o.createdAt.split('T')[0];
-    const matchDate = d >= startDate && d <= endDate;
+    // Garante que pegamos apenas a parte da data YYYY-MM-DD
+    const orderDateStr = o.createdAt.includes('T') ? o.createdAt.split('T')[0] : o.createdAt.slice(0, 10);
+    
+    const matchDate = orderDateStr >= startDate && orderDateStr <= endDate;
     const matchClient = selectedClientId ? o.clientId === selectedClientId : true;
     
     // Se tiver termo de busca, verifica se algum ITEM do pedido corresponde
