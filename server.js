@@ -8,9 +8,9 @@ const PORT = 3001;
 
 // Configuração básica da conexão (sem o banco inicialmente)
 const dbConfig = {
-    host: 'localhost',
+    host: '127.0.0.1', // ALTERADO: Usa IP direto em vez de 'localhost' para evitar erros no Windows
     user: 'root',      // Padrão do XAMPP
-    password: '',      // Padrão do XAMPP (vazio)
+    password: '',      // Padrão do XAMPP (vazio). Se você mudou a senha do root no XAMPP, coloque aqui.
     dateStrings: true,
     multipleStatements: true
 };
@@ -97,12 +97,13 @@ const INIT_SQL = `
 
 async function initDB() {
     try {
+        console.log('🔄 Tentando conectar ao MySQL em 127.0.0.1...');
         // 1. Conecta sem especificar o banco para poder criá-lo
         const connection = await mysql.createConnection(dbConfig);
         
-        console.log('🔄 Verificando banco de dados...');
+        console.log('🔄 Conectado! Verificando banco de dados...');
         await connection.query(INIT_SQL);
-        console.log('✅ Banco de dados configurado.');
+        console.log('✅ Banco de dados configurado com sucesso.');
         console.log('✅ Usuário ADMIN garantido (Login: admin / Senha: admin)');
         
         await connection.end();
@@ -114,12 +115,28 @@ async function initDB() {
         });
 
     } catch (err) {
-        console.error('❌ ERRO CRÍTICO NO BANCO DE DADOS:', err.message);
-        console.error('👉 Verifique se o MySQL (XAMPP) está rodando.');
+        console.error('\n❌ ERRO CRÍTICO NO BANCO DE DADOS:');
+        console.error(`Mensagem: ${err.message}`);
+        
+        if (err.code === 'ECONNREFUSED') {
+            console.error('👉 O XAMPP (MySQL) parece estar DESLIGADO ou em outra porta.');
+            console.error('👉 Abra o painel do XAMPP e clique em START no MySQL.');
+        } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+            console.error('👉 Senha do banco incorreta! Se você colocou senha no root do XAMPP, atualize a variável dbConfig no arquivo server.js.');
+        }
+        console.error('\n');
     }
 }
 
 initDB();
+
+// Middleware para verificar se o banco está pronto
+app.use((req, res, next) => {
+    if (!pool) {
+        return res.status(500).json({ error: 'O servidor não conseguiu conectar ao banco de dados. Verifique o terminal.' });
+    }
+    next();
+});
 
 // --- ROTAS USERS ---
 app.get('/api/users', async (req, res) => {
@@ -368,4 +385,5 @@ app.post('/api/config', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Servidor Backend rodando em http://localhost:${PORT}`);
+    console.log(`   (Certifique-se que o XAMPP MySQL está rodando na porta 3306)`);
 });
