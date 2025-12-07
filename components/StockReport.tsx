@@ -49,9 +49,10 @@ const StockReport: React.FC = () => {
     return {
       ...p,
       totalQty: netQty,
-      totalValue: netQty * basePrice // Valor da linha mantém a lógica líquida
+      totalValue: netQty * basePrice, // Valor da linha mantém a lógica líquida
+      hasStock: stockValues.some(val => val !== 0) // Flag para saber se tem algo diferente de 0
     };
-  });
+  }).filter(item => item.hasStock); // FILTRO APLICADO: Remove se tudo for 0
 
   const handlePrint = () => {
     window.print();
@@ -68,7 +69,7 @@ const StockReport: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-900 flex items-center">
               <Archive className="w-6 h-6 mr-2 text-blue-600" /> Relatório de Estoque Valorizado
             </h2>
-            <p className="text-gray-500 text-sm mt-1">Visão geral quantitativa e financeira. Totais consideram apenas estoque físico (positivo).</p>
+            <p className="text-gray-500 text-sm mt-1">Visão geral quantitativa e financeira. Exibindo apenas produtos com disponibilidade (ocultando zerados).</p>
           </div>
           <button 
             onClick={handlePrint}
@@ -93,7 +94,7 @@ const StockReport: React.FC = () => {
             </div>
           </div>
           <div className="text-sm text-gray-500 pb-2">
-             Exibindo <strong>{filteredProducts.length}</strong> produtos.
+             Exibindo <strong>{processedData.length}</strong> produtos (Filtro aplicado + Zerados ocultos).
           </div>
         </div>
       </div>
@@ -132,9 +133,9 @@ const StockReport: React.FC = () => {
                <Archive className="w-6 h-6" />
            </div>
            <div>
-               <p className="text-xs font-bold text-gray-500 uppercase">Total SKUs</p>
+               <p className="text-xs font-bold text-gray-500 uppercase">Total SKUs Ativos</p>
                <p className="text-2xl font-bold text-gray-900">{processedData.length}</p>
-               <span className="text-xs text-gray-400">Modelos/Cores distintos</span>
+               <span className="text-xs text-gray-400">Modelos/Cores com saldo</span>
            </div>
        </div>
       </div>
@@ -155,7 +156,7 @@ const StockReport: React.FC = () => {
                  </thead>
                  <tbody className="divide-y divide-gray-100">
                      {processedData.length === 0 ? (
-                         <tr><td colSpan={6} className="p-8 text-center text-gray-400">Nenhum produto encontrado.</td></tr>
+                         <tr><td colSpan={6} className="p-8 text-center text-gray-400">Nenhum produto encontrado com saldo.</td></tr>
                      ) : (
                         processedData.map((item) => (
                              <tr key={item.id} className="hover:bg-gray-50">
@@ -169,7 +170,9 @@ const StockReport: React.FC = () => {
                                              let colorClass = "bg-gray-100 text-gray-400";
                                              if (qty > 0) colorClass = "bg-blue-50 text-blue-700 border-blue-100";
                                              if (qty < 0) colorClass = "bg-red-50 text-red-600 border-red-100 font-bold";
-
+                                             
+                                             // Opcional: Ocultar tamanhos zerados dentro da grade se quiser limpar mais visualmente
+                                             // mas geralmente ver a grade completa é bom. Mantivemos exibindo.
                                              return (
                                                  <span key={size} className={`text-xs px-1.5 py-0.5 rounded border ${colorClass}`}>
                                                      <span className="font-bold">{size}:</span> {qty}
