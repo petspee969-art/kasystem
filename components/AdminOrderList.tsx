@@ -489,13 +489,25 @@ const AdminOrderList: React.FC = () => {
       order.items.forEach(item => {
         const key = `${item.reference}-${item.color}`;
         if (!aggregation[key]) {
-          aggregation[key] = { ...item, sizes: { ...item.sizes }, totalQty: item.totalQty };
+          aggregation[key] = { 
+              ...item, 
+              sizes: { ...item.sizes }, 
+              totalQty: typeof item.totalQty === 'number' ? item.totalQty : 0 
+          };
         } else {
-          aggregation[key].totalQty += (item.totalQty as number);
-          Object.entries(item.sizes).forEach(([size, qty]) => {
-            const current = aggregation[key].sizes[size] || 0;
-            aggregation[key].sizes[size] = current + (qty as number);
-          });
+          // Explicit additions to avoid type errors
+          const addQty = (typeof item.totalQty === 'number' && !isNaN(item.totalQty)) ? item.totalQty : 0;
+          const currentTotal = (typeof aggregation[key].totalQty === 'number') ? aggregation[key].totalQty : 0;
+          aggregation[key].totalQty = currentTotal + addQty;
+          
+          if (item.sizes) {
+              Object.keys(item.sizes).forEach((size) => {
+                const qty = item.sizes[size];
+                const val = (typeof qty === 'number') ? qty : 0;
+                const current = aggregation[key].sizes[size] || 0;
+                aggregation[key].sizes[size] = current + val;
+              });
+          }
         }
       });
     });
@@ -513,7 +525,10 @@ const AdminOrderList: React.FC = () => {
     aggregatedItems.forEach(item => {
         ALL_SIZES.forEach(s => {
             const qty = item.sizes[s];
-            if (typeof qty === 'number') sizeTotals[s] += qty;
+            if (typeof qty === 'number') {
+                const current = sizeTotals[s] || 0;
+                sizeTotals[s] = current + qty;
+            }
         });
     });
 
@@ -600,7 +615,7 @@ const AdminOrderList: React.FC = () => {
           </div>
       )}
 
-      {showAggregation && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print p-2 md:p-4"><div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl"><div className="p-4 md:p-6 border-b flex justify-between items-center bg-purple-50"><div><h2 className="text-lg md:text-xl font-bold text-purple-900 flex items-center"><Calculator className="w-5 h-5 mr-2" /> Resumo de Produção</h2><p className="text-xs md:text-sm text-purple-600 mt-1">{selectedOrderIds.size} pedidos selecionados</p></div><button onClick={() => setShowAggregation(false)} className="p-2 hover:bg-purple-100 rounded-full"><X className="w-6 h-6 text-purple-800" /></button></div><div className="p-4 md:p-6 overflow-y-auto flex-1 overflow-x-auto"><table className="w-full text-sm border-collapse border border-gray-300 min-w-[700px]"><thead className="bg-gray-100"><tr><th className="border p-2 text-left">Ref</th><th className="border p-2 text-left">Cor</th>{ALL_SIZES.map(s => <th key={s} className="border p-2 text-center w-10">{s}</th>)}<th className="border p-2 text-right">Total</th></tr></thead><tbody>{aggregatedItems.map((item, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="border p-2 font-bold">{item.reference}</td><td className="border p-2 uppercase">{item.color}</td>{ALL_SIZES.map(s => (<td key={s} className="border p-2 text-center">{item.sizes[s] ? <span className="font-bold">{item.sizes[s]}</span> : <span className="text-gray-300">-</span>}</td>))}<td className="border p-2 text-right font-bold text-lg">{item.totalQty}</td></tr>))}</tbody><tfoot className="bg-purple-50 font-bold text-purple-900"><tr><td colSpan={2} className="border p-3 text-right">TOTAL:</td>{ALL_SIZES.map(s => { const colTotal = aggregatedItems.reduce((acc: number, i: OrderItem) => { const qty = (i.sizes[s] as number) || 0; return acc + qty; }, 0); return <td key={s} className="border p-3 text-center">{colTotal || ''}</td> })}<td className="border p-3 text-right text-xl">{aggregatedItems.reduce((acc: number, i: OrderItem) => acc + ((i.totalQty as number) || 0), 0)}</td></tr></tfoot></table></div><div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end"><button onClick={handlePrintAggregation} className="bg-blue-600 text-white px-6 py-3 md:py-2 rounded hover:bg-blue-700 flex items-center shadow-lg w-full md:w-auto justify-center"><Printer className="w-5 h-5 mr-2" /> Imprimir Lista</button></div></div></div>)}
+      {showAggregation && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print p-2 md:p-4"><div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl"><div className="p-4 md:p-6 border-b flex justify-between items-center bg-purple-50"><div><h2 className="text-lg md:text-xl font-bold text-purple-900 flex items-center"><Calculator className="w-5 h-5 mr-2" /> Resumo de Produção</h2><p className="text-xs md:text-sm text-purple-600 mt-1">{selectedOrderIds.size} pedidos selecionados</p></div><button onClick={() => setShowAggregation(false)} className="p-2 hover:bg-purple-100 rounded-full"><X className="w-6 h-6 text-purple-800" /></button></div><div className="p-4 md:p-6 overflow-y-auto flex-1 overflow-x-auto"><table className="w-full text-sm border-collapse border border-gray-300 min-w-[700px]"><thead className="bg-gray-100"><tr><th className="border p-2 text-left">Ref</th><th className="border p-2 text-left">Cor</th>{ALL_SIZES.map(s => <th key={s} className="border p-2 text-center w-10">{s}</th>)}<th className="border p-2 text-right">Total</th></tr></thead><tbody>{aggregatedItems.map((item, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="border p-2 font-bold">{item.reference}</td><td className="border p-2 uppercase">{item.color}</td>{ALL_SIZES.map(s => (<td key={s} className="border p-2 text-center">{item.sizes[s] ? <span className="font-bold">{item.sizes[s]}</span> : <span className="text-gray-300">-</span>}</td>))}<td className="border p-2 text-right font-bold text-lg">{item.totalQty}</td></tr>))}</tbody><tfoot className="bg-purple-50 font-bold text-purple-900"><tr><td colSpan={2} className="border p-3 text-right">TOTAL:</td>{ALL_SIZES.map(s => { const colTotal = aggregatedItems.reduce((acc, i) => { const qty = (i.sizes && typeof i.sizes[s] === 'number') ? i.sizes[s] : 0; return acc + qty; }, 0); return <td key={s} className="border p-3 text-center">{colTotal || ''}</td> })}<td className="border p-3 text-right text-xl">{aggregatedItems.reduce((acc, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}</td></tr></tfoot></table></div><div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end"><button onClick={handlePrintAggregation} className="bg-blue-600 text-white px-6 py-3 md:py-2 rounded hover:bg-blue-700 flex items-center shadow-lg w-full md:w-auto justify-center"><Printer className="w-5 h-5 mr-2" /> Imprimir Lista</button></div></div></div>)}
     </div>
   );
 };
