@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Order } from '../types';
 import { getOrders } from '../services/storageService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
-import { generateSalesAnalysis } from '../services/geminiService';
-import { Sparkles, RefreshCcw, TrendingUp, Users, ShoppingBag, Package, Calendar, Loader2 } from 'lucide-react';
+import { RefreshCcw, TrendingUp, Users, ShoppingBag, Package, Calendar, Loader2 } from 'lucide-react';
 
 interface Props {
   onNavigate: (tab: string) => void;
@@ -11,8 +11,6 @@ interface Props {
 
 const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [aiAnalysis, setAiAnalysis] = useState<string>("");
-  const [loadingAi, setLoadingAi] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
 
   const fetchData = async () => {
@@ -64,14 +62,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
   // 4. Colors for Charts
   const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
 
-  const handleAiAnalysis = async () => {
-    setLoadingAi(true);
-    setAiAnalysis("");
-    const result = await generateSalesAnalysis(orders);
-    setAiAnalysis(result || "Sem dados suficientes.");
-    setLoadingAi(false);
-  };
-
   if (loadingData) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="animate-spin text-blue-600 w-8 h-8" /></div>
   }
@@ -86,14 +76,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
            <button 
-             onClick={handleAiAnalysis}
-             disabled={loadingAi}
-             className="flex items-center bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition shadow-md"
-           >
-             <Sparkles className="w-4 h-4 mr-2" />
-             {loadingAi ? 'Analisando...' : 'Gerar Análise IA'}
-           </button>
-           <button 
              onClick={fetchData}
              className="p-2 bg-white border rounded-lg hover:bg-gray-50 transition shadow-sm"
              title="Atualizar Dados"
@@ -102,16 +84,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
            </button>
         </div>
       </div>
-
-      {/* AI Insights Section */}
-      {aiAnalysis && (
-        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border border-purple-100 shadow-sm">
-          <h3 className="font-bold text-purple-900 mb-3 flex items-center text-lg">
-            <Sparkles className="w-5 h-5 mr-2 text-purple-600" /> Insights Inteligentes da IA
-          </h3>
-          <p className="text-gray-800 whitespace-pre-line leading-relaxed">{aiAnalysis}</p>
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

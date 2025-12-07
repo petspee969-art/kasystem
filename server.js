@@ -6,11 +6,12 @@ import cors from 'cors';
 const app = express();
 const PORT = 3001;
 
-// Configuração básica da conexão (sem o banco inicialmente)
+// Configuração básica da conexão
 const dbConfig = {
-    host: '127.0.0.1', // ALTERADO: Usa IP direto em vez de 'localhost' para evitar erros no Windows
+    host: '127.0.0.1', 
+    port: 3306,        // Porta padrão do MySQL
     user: 'root',      // Padrão do XAMPP
-    password: '',      // Padrão do XAMPP (vazio). Se você mudou a senha do root no XAMPP, coloque aqui.
+    password: '',      // Padrão do XAMPP (vazio)
     dateStrings: true,
     multipleStatements: true
 };
@@ -19,6 +20,12 @@ const DB_NAME = 'confeccao_db';
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware de Log
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+});
 
 let pool;
 
@@ -97,7 +104,7 @@ const INIT_SQL = `
 
 async function initDB() {
     try {
-        console.log('🔄 Tentando conectar ao MySQL em 127.0.0.1...');
+        console.log('🔄 Tentando conectar ao MySQL em 127.0.0.1:3306...');
         // 1. Conecta sem especificar o banco para poder criá-lo
         const connection = await mysql.createConnection(dbConfig);
         
@@ -133,7 +140,8 @@ initDB();
 // Middleware para verificar se o banco está pronto
 app.use((req, res, next) => {
     if (!pool) {
-        return res.status(500).json({ error: 'O servidor não conseguiu conectar ao banco de dados. Verifique o terminal.' });
+        console.error('⚠️ Requisição recebida, mas banco de dados não está conectado.');
+        return res.status(500).json({ error: 'O servidor não conseguiu conectar ao MySQL. Verifique se o XAMPP está rodando.' });
     }
     next();
 });
@@ -384,6 +392,6 @@ app.post('/api/config', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor Backend rodando em http://localhost:${PORT}`);
+    console.log(`🚀 Servidor Backend rodando em http://127.0.0.1:${PORT}`);
     console.log(`   (Certifique-se que o XAMPP MySQL está rodando na porta 3306)`);
 });

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { getUsers } from '../services/storageService';
-import { Lock, User as UserIcon, Loader2, ServerCrash, Database } from 'lucide-react';
+import { Lock, User as UserIcon, Loader2, ServerCrash, Database, AlertCircle } from 'lucide-react';
 
 interface Props {
   onLogin: (user: User) => void;
@@ -27,7 +27,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
       const users = await getUsers();
       
       if (!Array.isArray(users)) {
-          throw new Error("Resposta inválida do servidor.");
+          throw new Error("Resposta inválida do servidor (formato incorreto).");
       }
 
       const validUser = users.find(u => u.username === cleanUser && u.password === cleanPass);
@@ -36,23 +36,33 @@ const Login: React.FC<Props> = ({ onLogin }) => {
         onLogin(validUser);
       } else {
         setError(
-            <span>
-                Credenciais inválidas. <br/>
-                Tente <strong>admin</strong> / <strong>admin</strong>
+            <span className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>Credenciais inválidas. Tente <b>admin</b> / <b>admin</b></span>
             </span>
         );
       }
     } catch (err: any) {
       console.error(err);
-      // Mensagem de erro amigável para problemas de conexão
+      
+      let errorDetails = err.message || "Erro desconhecido";
+      if (errorDetails.includes("Failed to fetch")) {
+          errorDetails = "O servidor backend parece estar desligado.";
+      }
+
       setError(
         <div className="text-left">
-            <p className="font-bold flex items-center gap-1"><ServerCrash className="w-4 h-4" /> Erro de Conexão!</p>
-            <p className="mt-1">Não foi possível conectar ao servidor.</p>
-            <ul className="list-disc ml-4 mt-2 text-xs opacity-90">
-                <li>Verifique se o <strong>XAMPP (MySQL)</strong> está ligado (Start).</li>
-                <li>Verifique se rodou <strong>npm start</strong> no terminal.</li>
-            </ul>
+            <p className="font-bold flex items-center gap-1 text-red-800"><ServerCrash className="w-4 h-4" /> Falha na Comunicação</p>
+            <p className="mt-1 font-semibold text-red-700">{errorDetails}</p>
+            
+            <div className="mt-3 bg-white p-3 rounded border border-red-100 text-xs text-gray-600">
+                <p className="font-bold mb-1">Checklist de Solução:</p>
+                <ul className="list-disc ml-4 space-y-1">
+                    <li>Verifique se o <strong>XAMPP</strong> está aberto e o <strong>MySQL</strong> está "Running" (Verde).</li>
+                    <li>Verifique o terminal onde você rodou o comando. Ele deve mostrar: <code className="bg-gray-100 px-1 rounded">Backend rodando em http://127.0.0.1:3001</code></li>
+                    <li>Se o erro for de banco de dados, verifique se a senha do root no arquivo <code>server.js</code> está correta.</li>
+                </ul>
+            </div>
         </div>
       );
     } finally {
@@ -73,7 +83,7 @@ const Login: React.FC<Props> = ({ onLogin }) => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200">
+            <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200 shadow-inner">
               {error}
             </div>
           )}
