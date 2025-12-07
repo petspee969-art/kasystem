@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Order } from '../types';
 import { getOrders } from '../services/storageService';
@@ -24,15 +23,15 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     fetchData();
   }, []);
 
-  // --- ANALYTICS CALCULATIONS ---
+  // --- CÁLCULOS ANALÍTICOS ---
 
-  // 1. Basic KPIs
+  // 1. KPIs Básicos
   const totalOrders = orders.length;
   const totalPieces = orders.reduce((acc, curr) => acc + curr.totalPieces, 0);
   const avgPiecesPerOrder = totalOrders > 0 ? Math.round(totalPieces / totalOrders) : 0;
   const activeClients = new Set(orders.map(o => o.clientId)).size;
 
-  // 2. Rep Performance (Ranking)
+  // 2. Desempenho de Representantes
   const repPerfMap: Record<string, { orders: number; pieces: number }> = {};
   orders.forEach(o => {
     const repName = o.repName || 'Desconhecido';
@@ -45,7 +44,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     .map(rep => ({ name: rep, pecas: repPerfMap[rep].pieces, pedidos: repPerfMap[rep].orders }))
     .sort((a, b) => b.pecas - a.pecas);
 
-  // 3. Top Products (Reference + Color)
+  // 3. Top Produtos
   const productSales: Record<string, number> = {};
   orders.forEach(o => {
     o.items.forEach(item => {
@@ -59,7 +58,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
     .sort((a, b) => b.pecas - a.pecas)
     .slice(0, 8); // Top 8
 
-  // 4. Colors for Charts
+  // Cores para gráficos
   const COLORS = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
 
   if (loadingData) {
@@ -72,7 +71,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
       <div className="flex flex-col md:flex-row justify-between items-center">
         <div>
            <h2 className="text-3xl font-bold text-gray-900">Dashboard de Controle</h2>
-           <p className="text-gray-500 mt-1">Visão estratégica da produção e vendas</p>
+           <p className="text-gray-500 mt-1">Visão geral da sua confecção</p>
         </div>
         <div className="flex gap-2 mt-4 md:mt-0">
            <button 
@@ -126,11 +125,10 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Gráficos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Top Products Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="text-lg font-bold text-gray-800 mb-6">Top Produtos (Referência + Cor)</h3>
+            <h3 className="text-lg font-bold text-gray-800 mb-6">Top Produtos (Ref + Cor)</h3>
             <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topProductsData} layout="vertical" margin={{ left: 40 }}>
@@ -148,7 +146,6 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
             </div>
         </div>
 
-        {/* Representative Performance Chart */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h3 className="text-lg font-bold text-gray-800 mb-6">Ranking de Representantes</h3>
             <div className="h-80">
@@ -167,7 +164,7 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Recent Activity Table */}
+      {/* Tabela de Últimas Vendas */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100">
              <h3 className="text-lg font-bold text-gray-800">Últimas Vendas</h3>
@@ -193,6 +190,9 @@ const AdminDashboard: React.FC<Props> = ({ onNavigate }) => {
                             <td className="p-4 text-right font-bold text-blue-600">{order.totalPieces}</td>
                         </tr>
                     ))}
+                    {orders.length === 0 && (
+                         <tr><td colSpan={5} className="p-8 text-center text-gray-400">Nenhuma venda registrada ainda.</td></tr>
+                    )}
                 </tbody>
             </table>
           </div>
