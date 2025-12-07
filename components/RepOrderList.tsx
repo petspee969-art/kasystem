@@ -97,6 +97,10 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
         ? `Desconto (${order.discountValue}%)` 
         : `Desconto (Fixo)`;
 
+    const deliveryDateDisplay = (order.deliveryDate && !isNaN(new Date(order.deliveryDate).getTime())) 
+        ? new Date(order.deliveryDate).toLocaleDateString('pt-BR') 
+        : 'A Combinar';
+
     const html = `
       <html>
         <head>
@@ -140,7 +144,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                     </div>
                     <div>
                         <p class="text-xs uppercase text-gray-500 font-bold">Entrega</p>
-                        <p>${order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : 'A Combinar'}</p>
+                        <p>${deliveryDateDisplay}</p>
                     </div>
                     <div>
                         <p class="text-xs uppercase text-gray-500 font-bold">Pagamento</p>
@@ -347,7 +351,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Entrega</p>
-                                <p>{viewOrder.deliveryDate ? new Date(viewOrder.deliveryDate).toLocaleDateString() : 'A combinar'}</p>
+                                <p>{(viewOrder.deliveryDate && !isNaN(new Date(viewOrder.deliveryDate).getTime())) ? new Date(viewOrder.deliveryDate).toLocaleDateString('pt-BR') : 'A Combinar'}</p>
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500 uppercase">Pagamento</p>
