@@ -6,33 +6,118 @@ import cors from 'cors';
 const app = express();
 const PORT = 3001;
 
-// Configuração do Banco de Dados
+// Configuração básica da conexão (sem o banco inicialmente)
 const dbConfig = {
     host: 'localhost',
-    user: 'root',      // Altere conforme seu usuário MySQL
-    password: '',      // Altere conforme sua senha MySQL
-    database: 'confeccao_db',
-    dateStrings: true  // Importante para datas retornarem como string
+    user: 'root',      // Altere se seu usuário for diferente
+    password: '',      // Altere se sua senha for diferente
+    dateStrings: true,
+    multipleStatements: true
 };
 
+const DB_NAME = 'confeccao_db';
+
 app.use(cors());
-app.use(express.json()); // Substitui o body-parser antigo
+app.use(express.json());
 
 let pool;
 
-async function connectDB() {
+// Scripts de Criação das Tabelas
+const INIT_SQL = `
+    CREATE DATABASE IF NOT EXISTS ${DB_NAME};
+    USE ${DB_NAME};
+
+    CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(100),
+        username VARCHAR(50) UNIQUE,
+        password VARCHAR(50),
+        role VARCHAR(20)
+    );
+
+    CREATE TABLE IF NOT EXISTS products (
+        id VARCHAR(50) PRIMARY KEY,
+        reference VARCHAR(50),
+        color VARCHAR(50),
+        grid_type VARCHAR(20),
+        stock JSON,
+        enforce_stock BOOLEAN DEFAULT 0,
+        base_price DECIMAL(10, 2) DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS clients (
+        id VARCHAR(50) PRIMARY KEY,
+        rep_id VARCHAR(50),
+        name VARCHAR(100),
+        city VARCHAR(100),
+        neighborhood VARCHAR(100),
+        state VARCHAR(2)
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(50) PRIMARY KEY,
+        display_id INT,
+        romaneio VARCHAR(50),
+        is_partial BOOLEAN DEFAULT 0,
+        rep_id VARCHAR(50),
+        rep_name VARCHAR(100),
+        client_id VARCHAR(50),
+        client_name VARCHAR(100),
+        client_city VARCHAR(100),
+        client_state VARCHAR(2),
+        created_at DATETIME,
+        delivery_date DATE,
+        payment_method VARCHAR(100),
+        status VARCHAR(20),
+        items JSON,
+        total_pieces INT,
+        subtotal_value DECIMAL(10, 2),
+        discount_type VARCHAR(20),
+        discount_value DECIMAL(10, 2),
+        final_total_value DECIMAL(10, 2)
+    );
+
+    CREATE TABLE IF NOT EXISTS rep_prices (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        rep_id VARCHAR(50),
+        reference VARCHAR(50),
+        price DECIMAL(10, 2)
+    );
+
+    CREATE TABLE IF NOT EXISTS app_config (
+        \`key\` VARCHAR(50) PRIMARY KEY,
+        value JSON
+    );
+
+    -- Inserir usuário Admin padrão se não existir
+    INSERT IGNORE INTO users (id, name, username, password, role) 
+    VALUES ('1', 'Administrador', 'admin', 'admin', 'admin');
+`;
+
+async function initDB() {
     try {
-        pool = mysql.createPool(dbConfig);
-        // Teste simples de conexão
-        const connection = await pool.getConnection();
-        console.log('✅ Conectado ao MySQL com sucesso!');
-        connection.release();
+        // 1. Conecta sem especificar o banco para poder criá-lo
+        const connection = await mysql.createConnection(dbConfig);
+        
+        console.log('🔄 Verificando banco de dados...');
+        await connection.query(INIT_SQL);
+        console.log('✅ Banco de dados e tabelas verificados/criados com sucesso!');
+        
+        await connection.end();
+
+        // 2. Inicializa o Pool conectado ao banco correto
+        pool = mysql.createPool({
+            ...dbConfig,
+            database: DB_NAME
+        });
+
     } catch (err) {
-        console.error('❌ Erro ao conectar ao MySQL:', err.message);
+        console.error('❌ ERRO CRÍTICO NO BANCO DE DADOS:', err.message);
+        console.error('👉 Verifique se o MySQL está rodando e se o usuário/senha no arquivo server.js estão corretos.');
     }
 }
 
-connectDB();
+initDB();
 
 // --- ROTAS USERS ---
 app.get('/api/users', async (req, res) => {
@@ -67,11 +152,11 @@ app.delete('/api/users/:id', async (req, res) => {
 app.get('/api/products', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM products');
-        // O driver mysql2 geralmente parseia JSON automaticamente, mas garantimos aqui
         const products = rows.map(p => ({
             ...p,
             stock: typeof p.stock === 'string' ? JSON.parse(p.stock) : p.stock,
-            enforce_stock: !!p.enforce_stock
+            enforce_stock: !!p.enforce_stock,
+            base_price: parseFloat(p.base_price)
         }));
         res.json(products);
     } catch (err) {
@@ -82,7 +167,6 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/products', async (req, res) => {
     try {
         const data = req.body;
-        // Stringify JSON para salvar
         const dbData = { ...data, stock: JSON.stringify(data.stock) };
         await pool.query('INSERT INTO products SET ?', dbData);
         res.json({ success: true });
@@ -169,7 +253,6 @@ app.get('/api/rep_prices', async (req, res) => {
 app.post('/api/rep_prices', async (req, res) => {
     try {
         const { rep_id, reference, price } = req.body;
-        // Upsert logic (Insert or Update)
         const [exists] = await pool.query('SELECT id FROM rep_prices WHERE rep_id = ? AND reference = ?', [rep_id, reference]);
         
         if (exists.length > 0) {
@@ -187,7 +270,6 @@ app.post('/api/rep_prices', async (req, res) => {
 app.get('/api/orders', async (req, res) => {
     try {
         let query = 'SELECT * FROM orders';
-        // Simples validação de unicidade de romaneio via GET se necessário
         if (req.query.romaneio) {
             query += ` WHERE romaneio = '${req.query.romaneio}'`;
             if (req.query.excludeId) {
@@ -199,7 +281,10 @@ app.get('/api/orders', async (req, res) => {
         const orders = rows.map(o => ({
             ...o,
             items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items,
-            is_partial: !!o.is_partial
+            is_partial: !!o.is_partial,
+            subtotal_value: parseFloat(o.subtotal_value),
+            discount_value: parseFloat(o.discount_value),
+            final_total_value: parseFloat(o.final_total_value)
         }));
         res.json(orders);
     } catch (err) {
@@ -241,7 +326,6 @@ app.put('/api/orders/:id', async (req, res) => {
             data.items = JSON.stringify(data.items);
         }
         await pool.query('UPDATE orders SET ? WHERE id = ?', [data, req.params.id]);
-        // Retorna o pedido atualizado para sincronia
         const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
         const order = rows[0];
         order.items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
@@ -265,10 +349,14 @@ app.post('/api/config', async (req, res) => {
     try {
         const { key, value } = req.body;
         const [exists] = await pool.query('SELECT `key` FROM app_config WHERE `key` = ?', [key]);
+        // MySQL converte JSON para string automaticamente se a coluna for JSON,
+        // mas em algumas versões/drivers é bom garantir.
+        const valToSave = JSON.stringify(value); 
+        
         if (exists.length > 0) {
-            await pool.query('UPDATE app_config SET value = ? WHERE `key` = ?', [value, key]);
+            await pool.query('UPDATE app_config SET value = ? WHERE `key` = ?', [valToSave, key]);
         } else {
-            await pool.query('INSERT INTO app_config SET ?', { key, value });
+            await pool.query('INSERT INTO app_config SET ?', { key, value: valToSave });
         }
         res.json({ success: true });
     } catch (err) {
