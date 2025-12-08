@@ -2,16 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
-import { Package, Clock, CheckCircle, Search, Eye, X, Loader2, Printer, CheckCheck } from 'lucide-react';
+import { Package, Clock, CheckCircle, Search, Eye, X, Loader2, Printer, CheckCheck, Pencil } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 
 interface Props {
   user: User;
+  onEditOrder?: (order: Order) => void; // Nova prop para editar
 }
 
 const ALL_SIZES = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'];
 
-const RepOrderList: React.FC<Props> = ({ user }) => {
+const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,6 +242,7 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                 });
 
                 const isFullyPicked = totalSeparado >= totalPedido && totalPedido > 0;
+                const canEdit = !order.romaneio && !order.isPartial;
                 
                 return (
                     <div key={order.id} className={`bg-white p-4 rounded-lg shadow border-l-4 ${order.romaneio ? 'border-green-600' : isFullyPicked ? 'border-green-400' : 'border-blue-400'} flex flex-col md:flex-row justify-between items-center transition-all`}>
@@ -296,6 +298,17 @@ const RepOrderList: React.FC<Props> = ({ user }) => {
                             >
                                 <Printer className="w-5 h-5" />
                             </button>
+
+                            {/* Botão de Edição - Só aparece se não tiver romaneio e onEditOrder foi passado */}
+                            {canEdit && onEditOrder && (
+                                <button 
+                                    onClick={() => onEditOrder(order)}
+                                    className="text-orange-600 hover:bg-orange-50 p-2 rounded-full transition"
+                                    title="Editar Pedido"
+                                >
+                                    <Pencil className="w-5 h-5" />
+                                </button>
+                            )}
 
                             <button 
                             onClick={() => setViewOrder(order)}

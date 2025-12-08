@@ -12,13 +12,15 @@ import RepOrderList from './components/RepOrderList';
 import RepPriceManager from './components/RepPriceManager';
 import AdminReports from './components/AdminReports';
 import RepReports from './components/RepReports';
-import StockReport from './components/StockReport'; // Novo import
-import { User, Role } from './types';
+import StockReport from './components/StockReport';
+import RepStockView from './components/RepStockView'; // Novo import
+import { User, Role, Order } from './types';
 import { initializeStorage } from './services/storageService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     initializeStorage();
@@ -52,7 +54,21 @@ const App: React.FC = () => {
     setUser(null);
     localStorage.removeItem('current_user');
     setActiveTab('dashboard');
+    setEditingOrder(null);
   };
+
+  // Função chamada pelo RepOrderList para iniciar edição
+  const handleStartEditOrder = (order: Order) => {
+      setEditingOrder(order);
+      setActiveTab('new-order');
+  };
+
+  // Reseta o editingOrder se sair da aba 'new-order'
+  useEffect(() => {
+      if (activeTab !== 'new-order') {
+          setEditingOrder(null);
+      }
+  }, [activeTab]);
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -75,8 +91,18 @@ const App: React.FC = () => {
       {/* Rotas de Representante */}
       {user.role === Role.REP && (
         <>
-          {activeTab === 'rep-dashboard' && <RepOrderList user={user} />}
-          {activeTab === 'new-order' && <RepOrderForm user={user} onOrderCreated={() => setActiveTab('rep-dashboard')} />}
+          {activeTab === 'rep-dashboard' && <RepOrderList user={user} onEditOrder={handleStartEditOrder} />}
+          {activeTab === 'new-order' && (
+              <RepOrderForm 
+                  user={user} 
+                  onOrderCreated={() => { 
+                      setActiveTab('rep-dashboard'); 
+                      setEditingOrder(null); 
+                  }} 
+                  initialOrder={editingOrder} // Passa o pedido a editar
+              />
+          )}
+          {activeTab === 'rep-stock' && <RepStockView />}
           {activeTab === 'clients' && <ClientManager user={user} />}
           {activeTab === 'prices' && <RepPriceManager user={user} />}
           {activeTab === 'rep-reports' && <RepReports user={user} />}

@@ -99,23 +99,34 @@ export const deleteProduct = async (id: string): Promise<void> => {
 };
 
 // --- LOGICA DE ESTOQUE ---
-export const updateStockOnOrderCreation = async (items: OrderItem[]): Promise<void> => {
+export const updateStockOnOrderCreation = async (items: OrderItem[], reverse: boolean = false): Promise<void> => {
     const currentProducts = await getProducts();
 
     for (const item of items) {
+        // Se for SORTIDO, não mexe no estoque na criação/edição (será resolvido na separação)
+        if (item.color === 'SORTIDO') continue;
+
         const product = currentProducts.find(
             p => p.reference === item.reference && p.color === item.color
         );
 
         if (product && product.enforceStock) {
             const newStock = { ...product.stock };
-            
+            let changed = false;
+
             Object.entries(item.sizes).forEach(([size, qty]) => {
                 const currentQty = newStock[size] || 0;
-                newStock[size] = currentQty - qty;
+                if (reverse) {
+                    newStock[size] = currentQty + qty; // Devolve ao estoque
+                } else {
+                    newStock[size] = currentQty - qty; // Tira do estoque
+                }
+                changed = true;
             });
 
-            await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice);
+            if (changed) {
+                await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice);
+            }
         }
     }
 };
@@ -188,6 +199,9 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
 
     for (const key of processedKeys) {
         const [ref, color] = key.split(':::');
+        // Ignora SORTIDO no controle de estoque fino
+        if (color === 'SORTIDO') continue;
+
         const oldItem = oldMap[key];
         const newItem = newMap[key];
         const product = currentProducts.find(p => p.reference === ref && p.color === color);
@@ -439,6 +453,55 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
   }
 
   return orderWithSeq as Order;
+};
+
+// ATUALIZAÇÃO COMPLETA DE PEDIDO (Para edição do Representante)
+export const updateOrderFull = async (orderId: string, updatedData: Partial<Order>): Promise<void> => {
+    // 1. Busca o pedido antigo para reverter estoque
+    const res = await fetch(`${API_URL}/orders/${orderId}`);
+    const oldOrder = await handleResponse(res);
+    const oldItems = typeof oldOrder.items === 'string' ? JSON.parse(oldOrder.items) : oldOrder.items;
+
+    if (oldOrder.romaneio) {
+        throw new Error("Não é possível editar um pedido já finalizado (Com Romaneio).");
+    }
+
+    // 2. Verifica romaneio se mudou
+    if (updatedData.romaneio && updatedData.romaneio !== oldOrder.romaneio) {
+        const exists = await checkRomaneioExists(updatedData.romaneio, orderId);
+        if (exists) throw new Error(`O Romaneio nº ${updatedData.romaneio} já existe.`);
+    }
+
+    // 3. Reverte o estoque dos itens antigos (Devolve para o estoque)
+    await updateStockOnOrderCreation(oldItems, true);
+
+    // 4. Salva o pedido atualizado
+    const dbOrderUpdate = {
+        client_id: updatedData.clientId,
+        client_name: updatedData.clientName,
+        client_city: updatedData.clientCity,
+        client_state: updatedData.clientState,
+        delivery_date: updatedData.deliveryDate,
+        payment_method: updatedData.paymentMethod,
+        romaneio: updatedData.romaneio,
+        items: updatedData.items,
+        total_pieces: updatedData.totalPieces,
+        subtotal_value: updatedData.subtotalValue,
+        discount_type: updatedData.discountType,
+        discount_value: updatedData.discountValue,
+        final_total_value: updatedData.finalTotalValue
+    };
+
+    await fetch(`${API_URL}/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbOrderUpdate)
+    });
+
+    // 5. Baixa o estoque dos novos itens
+    if (updatedData.items) {
+        await updateStockOnOrderCreation(updatedData.items, false);
+    }
 };
 
 export const updateOrderRomaneio = async (id: string, romaneio: string): Promise<void> => {

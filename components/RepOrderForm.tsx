@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ProductDef, OrderItem, Client, SizeGridType, SIZE_GRIDS } from '../types';
-import { getProducts, getClients, addOrder, getRepPrices, generateUUID } from '../services/storageService';
+import { User, ProductDef, OrderItem, Client, SizeGridType, SIZE_GRIDS, Order } from '../types';
+import { getProducts, getClients, addOrder, getRepPrices, generateUUID, updateOrderFull } from '../services/storageService';
 import { Plus, Trash, Save, Edit2, Loader2, ChevronDown, Check, DollarSign, Calculator, Tag, AlertTriangle, Lock } from 'lucide-react';
 
 interface Props {
   user: User;
   onOrderCreated: () => void;
+  initialOrder?: Order | null; // Prop opcional para edição
 }
 
-const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
+const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) => {
   const [products, setProducts] = useState<ProductDef[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [priceMap, setPriceMap] = useState<Record<string, number>>({});
@@ -57,8 +58,6 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
           setProducts(p);
           setClients(c);
           
-          // Mapeia preços para busca rápida
-          // Normaliza a chave para Uppercase e Trim para garantir o match perfeito
           const pm: Record<string, number> = {};
           prices.forEach(pr => {
               if (pr.reference) {
@@ -66,6 +65,28 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
               }
           });
           setPriceMap(pm);
+
+          // Se estiver editando, popula o formulário
+          if (initialOrder) {
+              setSelectedClientId(initialOrder.clientId);
+              setDeliveryDate(initialOrder.deliveryDate || '');
+              setPaymentMethod(initialOrder.paymentMethod || '');
+              setRomaneio(initialOrder.romaneio || '');
+              setDiscountType(initialOrder.discountType || '');
+              setDiscountValue(initialOrder.discountValue ? String(initialOrder.discountValue) : '');
+              
+              // Garante cópia profunda dos itens para não mutar o objeto original
+              const itemsCopy = initialOrder.items.map(i => ({
+                  ...i,
+                  sizes: {...i.sizes},
+                  picked: i.picked ? {...i.picked} : undefined
+              }));
+              setItems(itemsCopy);
+          } else {
+              // Reset limpo se for novo pedido
+              resetForm();
+          }
+
         } catch (e) {
           console.error("Erro ao carregar dados iniciais", e);
         } finally {
@@ -73,7 +94,21 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
         }
     };
     loadData();
-  }, [user.id]);
+  }, [user.id, initialOrder]);
+
+  const resetForm = () => {
+      setSelectedClientId('');
+      setDeliveryDate('');
+      setPaymentMethod('');
+      setRomaneio('');
+      setDiscountType('');
+      setDiscountValue('');
+      setItems([]);
+      setQuickSizes({});
+      setCurrentRef('');
+      setCurrentColor('');
+      setManualUnitPrice('');
+  };
 
   // Quando a referência muda, busca cores e PREÇO da tabela
   useEffect(() => {
@@ -185,10 +220,29 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
     if (currentColor !== 'SORTIDO') {
         Object.entries(finalSizes).forEach(([size, totalQtyForSize]) => {
             if (selectedProductData && selectedProductData.enforceStock) {
+                // Se estivermos editando um pedido, o estoque "Disponível" visualmente na tabela é o ATUAL.
+                // Mas logicamente, se já tinhamos 10 no pedido e agora queremos 12, precisamos de +2.
+                // O cálculo é complexo no client-side.
+                // Simplificação: Avisa, mas permite o Rep tentar salvar. O backend vai validar/ajustar na hora do update.
+                // A UI mostra "Est: X", que é o estoque ATUAL (descontando o que já foi reservado por outros, mas NÃO descontando o que este pedido reservou anteriormente se já foi salvo).
+                
+                // Melhor UX: Se for NOVO item, valida normal. Se for edição, a validação visual é imprecisa.
+                // Vamos manter a validação simples: se qty > stock, avisa.
+                
                 const availableInStock = selectedProductData.stock[size] || 0;
                 
-                if (totalQtyForSize > availableInStock) {
-                    stockError = `Estoque insuficiente para o tamanho ${size}. (Solicitado Total: ${totalQtyForSize}, Disponível: ${availableInStock}).`;
+                // Se for edição, tentamos ser inteligentes:
+                // Estoque Real = Estoque Banco + Qtd Anteriormente Reservada Neste Pedido
+                let adjustedStock = availableInStock;
+                if (initialOrder) {
+                    const originalItem = initialOrder.items.find(i => i.reference === currentRef && i.color === currentColor);
+                    if (originalItem) {
+                        adjustedStock += (originalItem.sizes[size] || 0);
+                    }
+                }
+
+                if (totalQtyForSize > adjustedStock) {
+                    stockError = `Estoque insuficiente para o tamanho ${size}. (Solicitado Total: ${totalQtyForSize}, Disponível Aprox: ${adjustedStock}).`;
                 }
             }
         });
@@ -298,26 +352,39 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
     setErrorMsg('');
 
     try {
-        await addOrder({
-            id: generateUUID(),
+        const orderPayload = {
             repId: user.id,
             repName: user.name,
             clientId: client.id,
             clientName: client.name,
             clientCity: client.city,
             clientState: client.state,
-            createdAt: new Date().toISOString(),
             deliveryDate,
             paymentMethod,
             romaneio: romaneio, 
-            status: 'open',
+            status: 'open' as const,
             items,
             totalPieces: items.reduce((acc, i) => acc + i.totalQty, 0),
             subtotalValue,
             discountType: discountType || null,
             discountValue: distValNum,
             finalTotalValue
-        });
+        };
+
+        if (initialOrder) {
+            // MODO EDIÇÃO
+            await updateOrderFull(initialOrder.id, orderPayload);
+            alert("Pedido atualizado com sucesso!");
+        } else {
+            // MODO CRIAÇÃO
+            await addOrder({
+                id: generateUUID(),
+                createdAt: new Date().toISOString(),
+                isPartial: false,
+                ...orderPayload
+            });
+        }
+        
         // Sucesso
         onOrderCreated();
     } catch (error: any) {
@@ -338,8 +405,8 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
   return (
     <div className="bg-white p-4 md:p-6 rounded-lg shadow-sm">
       <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center justify-between">
-        <span>{editingIndex !== null ? 'Editando Item' : 'Novo Pedido'}</span>
-        {editingIndex !== null && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Modo Edição</span>}
+        <span>{initialOrder ? `Editando Pedido #${initialOrder.displayId}` : 'Novo Pedido'}</span>
+        {editingIndex !== null && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded">Modo Edição de Item</span>}
       </h2>
 
       {errorMsg && (
@@ -708,7 +775,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
           className="w-full md:w-auto bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 shadow-md flex items-center justify-center font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
           {loading ? <Loader2 className="animate-spin w-5 h-5 mr-2" /> : <Check className="w-5 h-5 mr-2" />}
-          {editingIndex !== null ? 'Salve a Edição' : `Finalizar (R$ ${finalTotalValue.toFixed(2)})`}
+          {initialOrder ? 'Atualizar Pedido' : `Finalizar (R$ ${finalTotalValue.toFixed(2)})`}
         </button>
       </div>
     </div>

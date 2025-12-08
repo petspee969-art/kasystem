@@ -72,6 +72,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
             <>
               <NavItem id="rep-dashboard" icon={LayoutDashboard} label="Meus Pedidos" />
               <NavItem id="new-order" icon={ShoppingCart} label="Novo Pedido" />
+              <NavItem id="rep-stock" icon={Archive} label="Estoque Disponível" />
               <NavItem id="clients" icon={Users} label="Meus Clientes" />
               <NavItem id="prices" icon={DollarSign} label="Tabela de Preços" />
               <NavItem id="rep-reports" icon={PieChart} label="Meus Relatórios" />
@@ -118,6 +119,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
               <>
                 <NavItem id="rep-dashboard" icon={LayoutDashboard} label="Meus Pedidos" />
                 <NavItem id="new-order" icon={ShoppingCart} label="Novo Pedido" />
+                <NavItem id="rep-stock" icon={Archive} label="Estoque" />
                 <NavItem id="clients" icon={Users} label="Meus Clientes" />
                 <NavItem id="prices" icon={DollarSign} label="Tabela de Preços" />
                 <NavItem id="rep-reports" icon={PieChart} label="Meus Relatórios" />
