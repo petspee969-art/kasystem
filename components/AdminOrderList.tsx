@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, OrderItem, ProductDef, SIZE_GRIDS, User, Role } from '../types';
-import { getOrders, updateOrderStatus, saveOrderPicking, getProducts, updateOrderRomaneio, getUsers, getRepPrices, addOrder, generateUUID } from '../services/storageService';
+import { getOrders, updateOrderStatus, saveOrderPicking, getProducts, updateOrderRomaneio, getUsers, getRepPrices, addOrder, generateUUID, deleteOrder } from '../services/storageService';
 import { Printer, Calculator, CheckCircle, X, Loader2, PackageOpen, Save, Lock, Unlock, AlertTriangle, Bell, RefreshCw, Plus, Trash, Search, Edit2, Check, Truck, Filter, User as UserIcon, Split, Scissors, ArrowRightLeft } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 
@@ -124,6 +124,27 @@ const AdminOrderList: React.FC = () => {
     } else {
         setSelectedOrderIds(new Set(filteredOrders.map(o => o.id))); 
     }
+  };
+
+  const handleDeleteOrder = async (order: Order) => {
+      let confirmMsg = `Tem certeza que deseja DELETAR o Pedido #${order.displayId}?`;
+      if (order.romaneio) {
+          confirmMsg += `\n\nATENÇÃO: Este pedido já possui Romaneio (${order.romaneio}).\n\nAo deletar, as peças separadas retornarão ao estoque.`;
+      } else {
+          confirmMsg += `\n\nAs peças reservadas (estoque travado) ou separadas (estoque livre) retornarão ao estoque.`;
+      }
+
+      if (window.confirm(confirmMsg)) {
+          setLoading(true);
+          try {
+              await deleteOrder(order.id);
+              await fetchData();
+              alert("Pedido excluído e estoque restaurado com sucesso.");
+          } catch (e: any) {
+              alert("Erro ao excluir pedido: " + e.message);
+              setLoading(false);
+          }
+      }
   };
 
   const handleEditRomaneio = async (order: Order) => {
@@ -711,6 +732,7 @@ const AdminOrderList: React.FC = () => {
                   <td className="p-4 text-center font-bold text-green-600">R$ {(order.finalTotalValue || 0).toFixed(2)}</td>
                   <td className="p-4 text-center">{order.romaneio ? <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200"><CheckCircle className="w-3 h-3 mr-1" /> Finalizado</span> : <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">Aberto</span>}</td>
                   <td className="p-4 text-right flex items-center justify-end gap-2">
+                    <button onClick={() => handleDeleteOrder(order)} className="text-gray-400 hover:text-red-600 hover:bg-red-50 transition p-2 rounded" title="Excluir Pedido"><Trash className="w-5 h-5" /></button>
                     <button onClick={() => handleEditRomaneio(order)} className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition p-2 rounded"><Truck className="w-5 h-5" /></button>
                     {order.romaneio ? <div className="text-gray-300 p-2"><Lock className="w-5 h-5" /></div> : <button onClick={() => openPickingModal(order)} className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-2 rounded transition"><PackageOpen className="w-5 h-5" /></button>}
                     <button onClick={() => handlePrintIndividual(order)} className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition p-2 rounded"><Printer className="w-5 h-5" /></button>
@@ -893,7 +915,7 @@ const AdminOrderList: React.FC = () => {
                   <tr>
                     <td colSpan={2} className="border p-3 text-right">TOTAL:</td>
                     {ALL_SIZES.map(s => {
-                      const colTotal = aggregatedItems.reduce((acc: number, i) => {
+                      const colTotal = aggregatedItems.reduce<number>((acc, i) => {
                         const val = i.sizes && i.sizes[s];
                         const qty = typeof val === 'number' ? val : 0;
                         return acc + qty;
@@ -901,7 +923,7 @@ const AdminOrderList: React.FC = () => {
                       return <td key={s} className="border p-3 text-center">{colTotal || ''}</td>
                     })}
                     <td className="border p-3 text-right text-xl">
-                      {aggregatedItems.reduce((acc: number, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}
+                      {aggregatedItems.reduce<number>((acc, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}
                     </td>
                   </tr>
                 </tfoot>

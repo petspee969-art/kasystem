@@ -362,6 +362,15 @@ app.put('/api/orders/:id', async (req, res) => {
     }
 });
 
+app.delete('/api/orders/:id', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- ROTA CONFIG (SEQUENCIAL) ---
 app.get('/api/config/:key', async (req, res) => {
     try {

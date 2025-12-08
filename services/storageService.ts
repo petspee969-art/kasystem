@@ -504,6 +504,62 @@ export const updateOrderFull = async (orderId: string, updatedData: Partial<Orde
     }
 };
 
+export const deleteOrder = async (orderId: string): Promise<void> => {
+    // 1. Busca detalhes do pedido (precisa dos itens para devolver ao estoque)
+    const res = await fetch(`${API_URL}/orders/${orderId}`);
+    const rawOrder = await handleResponse(res);
+    
+    // Normaliza os itens se vierem como string
+    const items: OrderItem[] = typeof rawOrder.items === 'string' ? JSON.parse(rawOrder.items) : rawOrder.items;
+
+    // 2. Busca catálogo de produtos para saber quais têm estoque travado vs livre
+    const allProducts = await getProducts();
+
+    // 3. Devolve estoque
+    for (const item of items) {
+        // Ignora itens puramente descritivos que não tem referência válida
+        if (!item.reference) continue;
+
+        const product = allProducts.find(p => p.reference === item.reference && p.color === item.color);
+
+        if (product) {
+            const currentStock = { ...product.stock };
+            let hasChange = false;
+
+            const allSizes = new Set([
+                ...Object.keys(item.sizes || {}),
+                ...(item.picked ? Object.keys(item.picked) : [])
+            ]);
+
+            allSizes.forEach(size => {
+                let qtyToRestore = 0;
+
+                if (product.enforceStock) {
+                    // Se o estoque é travado, o que foi baixado foi a Quantidade PEDIDA (sizes)
+                    // Devolvemos o que foi pedido.
+                    qtyToRestore = item.sizes[size] || 0;
+                } else {
+                    // Se o estoque é livre, o que foi baixado foi a Quantidade SEPARADA (picked)
+                    // Devolvemos apenas o que foi fisicamente separado.
+                    qtyToRestore = item.picked?.[size] || 0;
+                }
+
+                if (qtyToRestore > 0) {
+                    currentStock[size] = (currentStock[size] || 0) + qtyToRestore;
+                    hasChange = true;
+                }
+            });
+
+            if (hasChange) {
+                await updateProductInventory(product.id, currentStock, product.enforceStock, product.basePrice);
+            }
+        }
+    }
+
+    // 4. Deleta o registro do pedido
+    await fetch(`${API_URL}/orders/${orderId}`, { method: 'DELETE' });
+};
+
 export const updateOrderRomaneio = async (id: string, romaneio: string): Promise<void> => {
   const exists = await checkRomaneioExists(romaneio, id);
   if (exists) throw new Error(`O Romaneio nº ${romaneio} já existe.`);
