@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Order, OrderItem, ProductDef, SIZE_GRIDS, User, Role } from '../types';
 import { getOrders, updateOrderStatus, saveOrderPicking, getProducts, updateOrderRomaneio, getUsers, getRepPrices, addOrder, generateUUID } from '../services/storageService';
-import { Printer, Calculator, CheckCircle, X, Loader2, PackageOpen, Save, Lock, Unlock, AlertTriangle, Bell, RefreshCw, Plus, Trash, Search, Edit2, Check, Truck, Filter, User as UserIcon, Split, Scissors } from 'lucide-react';
+import { Printer, Calculator, CheckCircle, X, Loader2, PackageOpen, Save, Lock, Unlock, AlertTriangle, Bell, RefreshCw, Plus, Trash, Search, Edit2, Check, Truck, Filter, User as UserIcon, Split, Scissors, ArrowRightLeft } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 
 const ALL_SIZES = ['P', 'M', 'G', 'GG', 'G1', 'G2', 'G3'];
@@ -29,6 +29,11 @@ const AdminOrderList: React.FC = () => {
   const [savingPicking, setSavingPicking] = useState(false);
   const [showRomaneioOptions, setShowRomaneioOptions] = useState(false); 
   const [inputRomaneio, setInputRomaneio] = useState('');
+
+  // SORTIDO RESOLUTION STATE
+  const [sortidoItemIdx, setSortidoItemIdx] = useState<number | null>(null);
+  const [sortidoTargetColor, setSortidoTargetColor] = useState('');
+  const [sortidoDist, setSortidoDist] = useState<{[size: string]: number}>({});
 
   const [currentRepPriceMap, setCurrentRepPriceMap] = useState<Record<string, number>>({});
   const [editingItemIdx, setEditingItemIdx] = useState<number | null>(null);
@@ -167,6 +172,7 @@ const AdminOrderList: React.FC = () => {
       setAddColor('');
       setShowRomaneioOptions(false);
       setInputRomaneio('');
+      setSortidoItemIdx(null);
   };
 
   const handlePickingChange = (itemIdx: number, size: string, val: string) => {
@@ -233,6 +239,123 @@ const AdminOrderList: React.FC = () => {
           setPickingItems(newItems);
           if (editingItemIdx === index) setEditingItemIdx(null);
       }
+  };
+
+  // --- LOGICA RESOLVER SORTIDO ---
+  const handleOpenSortidoModal = (idx: number) => {
+      setSortidoItemIdx(idx);
+      setSortidoTargetColor('');
+      setSortidoDist({});
+  };
+
+  const handleConfirmSortidoDistribution = () => {
+      if (sortidoItemIdx === null || !sortidoTargetColor) return;
+      
+      const sortidoItem = pickingItems[sortidoItemIdx];
+      const qtyToDistribute = Object.values(sortidoDist).reduce((a: number, b: number) => a+b, 0);
+      
+      if (qtyToDistribute === 0) {
+          alert("Selecione pelo menos 1 peça.");
+          return;
+      }
+
+      // 1. Reduzir do Sortido (Quantidade Pedida)
+      // Se acabar tudo de um tamanho, remove do objeto sizes
+      const newSortidoSizes = { ...sortidoItem.sizes };
+      let sortidoEmpty = true;
+      
+      Object.entries(sortidoDist).forEach(([size, qtyVal]) => {
+          const qty = Number(qtyVal);
+          if (qty > 0) {
+              const current = newSortidoSizes[size] || 0;
+              const remain = Math.max(0, current - qty);
+              if (remain === 0) delete newSortidoSizes[size];
+              else newSortidoSizes[size] = remain;
+          }
+      });
+      
+      // Verifica se o item sortido ainda tem algo pedido
+      if (Object.keys(newSortidoSizes).length > 0) sortidoEmpty = false;
+
+      // 2. Adicionar/Atualizar no Item Destino (Cor Real)
+      // Procura se a cor destino já existe na lista
+      const targetIdx = pickingItems.findIndex(i => i.reference === sortidoItem.reference && i.color === sortidoTargetColor);
+      let targetItem: OrderItem;
+
+      if (targetIdx > -1) {
+          // Já existe, atualiza
+          targetItem = { ...pickingItems[targetIdx] };
+          if (!targetItem.sizes) targetItem.sizes = {};
+          if (!targetItem.picked) targetItem.picked = {};
+      } else {
+          // Cria novo
+          // Busca preço correto
+          let finalPrice = sortidoItem.unitPrice;
+          // Tenta buscar preço da tabela se o sortido estiver zerado ou genérico (mas geralmente mantemos o preço do pedido)
+          
+          targetItem = {
+              reference: sortidoItem.reference,
+              color: sortidoTargetColor,
+              gridType: sortidoItem.gridType,
+              sizes: {}, // Quantidade Pedida "transferida"
+              picked: {}, // Quantidade Separada (automático)
+              totalQty: 0,
+              unitPrice: finalPrice,
+              totalItemValue: 0
+          };
+      }
+
+      // Transfere quantidades
+      Object.entries(sortidoDist).forEach(([size, qtyVal]) => {
+          const qty = Number(qtyVal);
+          if (qty > 0) {
+              // Aumenta o "Pedido" do item real (pois estamos movendo o pedido do sortido pra cá)
+              targetItem.sizes[size] = (targetItem.sizes[size] || 0) + qty;
+              // Aumenta o "Separado" do item real (assumimos que ao distribuir, já está separando)
+              targetItem.picked![size] = (targetItem.picked![size] || 0) + qty;
+          }
+      });
+
+      // Recalcula totais do target
+      targetItem.totalQty = Object.values(targetItem.sizes).reduce((a, b) => a + b, 0);
+      targetItem.totalItemValue = targetItem.totalQty * targetItem.unitPrice;
+
+      // Atualiza lista principal
+      const newItems = [...pickingItems];
+      
+      // Atualiza o sortido
+      if (sortidoEmpty) {
+          // Se esvaziou o sortido, remove ele da lista?
+          // Melhor manter ele visível mas zerado se quiser, ou remover. Vamos remover pra limpar.
+          newItems.splice(sortidoItemIdx, 1);
+      } else {
+          const updatedSortido = { 
+              ...sortidoItem, 
+              sizes: newSortidoSizes,
+              totalQty: Object.values(newSortidoSizes).reduce((a: number, b: number)=>a+b, 0)
+          };
+          updatedSortido.totalItemValue = updatedSortido.totalQty * updatedSortido.unitPrice;
+          newItems[sortidoItemIdx] = updatedSortido;
+      }
+
+      // Insere/Atualiza o destino
+      if (targetIdx > -1) {
+          // O índice pode ter mudado se removemos o sortido e ele estava antes
+          // Mas vamos simplificar: se removemos o sortido, e o target estava DEPOIS, o index mudou.
+          // Estratégia segura: Adicionar no final se novo, ou atualizar no lugar se existente.
+          
+          // Se o sortido foi removido, precisamos re-encontrar o targetIdx ou ajustar
+          if (sortidoEmpty && sortidoItemIdx < targetIdx) {
+              newItems[targetIdx - 1] = targetItem;
+          } else {
+              newItems[targetIdx] = targetItem;
+          }
+      } else {
+          newItems.push(targetItem);
+      }
+
+      setPickingItems(newItems);
+      setSortidoItemIdx(null);
   };
 
   const validateStockBeforeAction = (): boolean => {
@@ -604,7 +727,7 @@ const AdminOrderList: React.FC = () => {
               <div className="bg-white rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
                    <div className="p-4 border-b flex justify-between items-center bg-orange-50 rounded-t-lg"><div><h2 className="text-lg font-bold text-orange-900 flex items-center"><PackageOpen className="w-6 h-6 mr-2" /> Separação de Pedido #{pickingOrder.displayId}</h2></div><button onClick={() => setPickingOrder(null)} className="p-2 hover:bg-orange-100 rounded-full"><X className="w-6 h-6 text-orange-800" /></button></div>
                     <div className="p-3 bg-gray-100 border-b flex flex-col md:flex-row gap-2 items-center"><span className="text-sm font-bold text-gray-600 flex items-center"><Plus className="w-4 h-4 mr-1" /> Incluir Ref:</span><select className="border p-1.5 rounded text-sm w-full md:w-40" value={addRef} onChange={(e) => { setAddRef(e.target.value); setAddColor(''); }}><option value="">Ref...</option>{uniqueRefs.map(r => <option key={r} value={r}>{r}</option>)}</select><select className="border p-1.5 rounded text-sm w-full md:w-40" value={addColor} onChange={(e) => setAddColor(e.target.value)} disabled={!addRef}><option value="">Cor...</option>{availableColors.map(c => <option key={c} value={c}>{c}</option>)}</select><button onClick={handleAddItem} disabled={!addRef || !addColor} className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-blue-700 disabled:opacity-50 w-full md:w-auto">Adicionar</button></div>
-                    <div className="p-4 overflow-y-auto flex-1 bg-gray-50"><table className="w-full text-sm border-collapse bg-white shadow-sm rounded-lg"><thead><tr className="bg-gray-100 text-gray-700"><th className="p-3 text-left">Produto</th><th className="p-3 text-left">Controle de Estoque</th><th className="p-3 text-center">Tamanhos</th><th className="p-3 text-center w-10">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{pickingItems.map((item, idx) => { const product = products.find(p => p.reference === item.reference && p.color === item.color); const isLocked = product?.enforceStock; const isNewItem = !pickingOrder.items.some(original => original.reference === item.reference && original.color === item.color); const isEditing = editingItemIdx === idx; return (<tr key={idx} className={isEditing ? 'bg-orange-50' : ''}><td className="p-3 align-top"><p className="font-bold text-gray-800">{item.reference}</p><p className="text-xs uppercase text-gray-500">{item.color}</p>{isNewItem && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded ml-1 font-bold">NOVO</span>}</td><td className="p-3 align-top">{isLocked ? (<div className="flex items-start text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100"><Lock className="w-4 h-4 mr-1 flex-shrink-0" /><div><span className="font-bold block">Estoque Travado</span><span>{isNewItem || isEditing ? 'Verifique a disp. abaixo' : 'Já baixado no pedido.'}</span></div></div>) : (<div className="flex items-start text-xs text-green-600 bg-green-50 p-2 rounded border border-green-100"><Unlock className="w-4 h-4 mr-1 flex-shrink-0" /><div><span className="font-bold block">Estoque Livre</span><span>Baixará ao salvar aqui.</span></div></div>)}</td><td className="p-3"><div className="flex flex-wrap gap-4 justify-center">{SIZE_GRIDS[item.gridType].map((size) => { const qty = Number(item.sizes[size]) || 0; const picked = Number(item.picked?.[size]) || 0; const isComplete = picked >= qty && qty > 0; const stockAvailable = (product?.stock?.[size] as number) || 0; return (<div key={size} className={`flex flex-col items-center border rounded p-2 ${isNewItem || isEditing ? 'bg-blue-50 border-blue-100' : 'bg-gray-50'}`}><span className="text-xs font-bold text-gray-500 mb-1">{size}</span><div className="flex items-center gap-1 mb-1"><span className="text-xs text-gray-400 mr-1">Ped:</span>{(isNewItem || isEditing) ? (<input type="number" min="0" className="w-12 text-center border-b border-blue-300 bg-transparent font-bold outline-none focus:bg-white text-sm" value={item.sizes[size] || ''} placeholder="0" onChange={(e) => handleOrderQtyChange(idx, size, e.target.value)} />) : (<span className="font-bold text-gray-800 text-sm">{qty}</span>)}</div><div className="flex items-center gap-1"><span className="text-xs text-blue-600 mr-1 font-bold">Sep:</span><input type="number" min="0" className={`w-12 text-center border rounded p-1 font-bold outline-none focus:ring-2 focus:ring-blue-500 ${isComplete ? 'bg-green-50 text-green-700 border-green-300' : 'bg-white'}`} value={item.picked?.[size] !== undefined ? item.picked[size] : ''} placeholder="0" onChange={(e) => handlePickingChange(idx, size, e.target.value)} /></div>{(isNewItem || isEditing) && isLocked && (<div className={`text-[10px] mt-1 font-bold ${qty > stockAvailable ? 'text-red-600' : 'text-green-600'}`}>Disp: {stockAvailable}</div>)}</div>) })}</div></td><td className="p-3 text-center align-middle"><div className="flex flex-col gap-2 items-center">{isEditing ? (<button onClick={() => setEditingItemIdx(null)} className="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded bg-white shadow-sm"><Check className="w-5 h-5" /></button>) : (<button onClick={() => setEditingItemIdx(idx)} className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded"><Edit2 className="w-5 h-5" /></button>)}<button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded"><Trash className="w-5 h-5" /></button></div></td></tr>)})}</tbody></table></div>
+                    <div className="p-4 overflow-y-auto flex-1 bg-gray-50"><table className="w-full text-sm border-collapse bg-white shadow-sm rounded-lg"><thead><tr className="bg-gray-100 text-gray-700"><th className="p-3 text-left">Produto</th><th className="p-3 text-left">Controle de Estoque</th><th className="p-3 text-center">Tamanhos</th><th className="p-3 text-center w-10">Ações</th></tr></thead><tbody className="divide-y divide-gray-100">{pickingItems.map((item, idx) => { const product = products.find(p => p.reference === item.reference && p.color === item.color); const isLocked = product?.enforceStock; const isNewItem = !pickingOrder.items.some(original => original.reference === item.reference && original.color === item.color); const isEditing = editingItemIdx === idx; return (<tr key={idx} className={isEditing ? 'bg-orange-50' : ''}><td className="p-3 align-top"><p className="font-bold text-gray-800">{item.reference}</p><p className="text-xs uppercase text-gray-500">{item.color}</p>{isNewItem && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded ml-1 font-bold">NOVO</span>}{item.color === 'SORTIDO' && <span className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded ml-1 font-bold">RESOLVER</span>}</td><td className="p-3 align-top">{isLocked ? (<div className="flex items-start text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100"><Lock className="w-4 h-4 mr-1 flex-shrink-0" /><div><span className="font-bold block">Estoque Travado</span><span>{isNewItem || isEditing ? 'Verifique a disp. abaixo' : 'Já baixado no pedido.'}</span></div></div>) : item.color === 'SORTIDO' ? (<div className="text-xs text-purple-600 bg-purple-50 p-2 rounded border border-purple-100 font-bold">Definir Cores Abaixo</div>) : (<div className="flex items-start text-xs text-green-600 bg-green-50 p-2 rounded border border-green-100"><Unlock className="w-4 h-4 mr-1 flex-shrink-0" /><div><span className="font-bold block">Estoque Livre</span><span>Baixará ao salvar aqui.</span></div></div>)}</td><td className="p-3"><div className="flex flex-wrap gap-4 justify-center">{SIZE_GRIDS[item.gridType].map((size) => { const qty = Number(item.sizes[size]) || 0; const picked = Number(item.picked?.[size]) || 0; const isComplete = picked >= qty && qty > 0; const stockAvailable = (product?.stock?.[size] as number) || 0; return (<div key={size} className={`flex flex-col items-center border rounded p-2 ${isNewItem || isEditing ? 'bg-blue-50 border-blue-100' : 'bg-gray-50'}`}><span className="text-xs font-bold text-gray-500 mb-1">{size}</span><div className="flex items-center gap-1 mb-1"><span className="text-xs text-gray-400 mr-1">Ped:</span>{(isNewItem || isEditing) ? (<input type="number" min="0" className="w-12 text-center border-b border-blue-300 bg-transparent font-bold outline-none focus:bg-white text-sm" value={item.sizes[size] || ''} placeholder="0" onChange={(e) => handleOrderQtyChange(idx, size, e.target.value)} />) : (<span className="font-bold text-gray-800 text-sm">{qty}</span>)}</div>{item.color !== 'SORTIDO' && <div className="flex items-center gap-1"><span className="text-xs text-blue-600 mr-1 font-bold">Sep:</span><input type="number" min="0" className={`w-12 text-center border rounded p-1 font-bold outline-none focus:ring-2 focus:ring-blue-500 ${isComplete ? 'bg-green-50 text-green-700 border-green-300' : 'bg-white'}`} value={item.picked?.[size] !== undefined ? item.picked[size] : ''} placeholder="0" onChange={(e) => handlePickingChange(idx, size, e.target.value)} /></div>}{(isNewItem || isEditing) && isLocked && (<div className={`text-[10px] mt-1 font-bold ${qty > stockAvailable ? 'text-red-600' : 'text-green-600'}`}>Disp: {stockAvailable}</div>)}</div>) })}</div></td><td className="p-3 text-center align-middle"><div className="flex flex-col gap-2 items-center">{item.color === 'SORTIDO' && (<button onClick={() => handleOpenSortidoModal(idx)} className="text-purple-600 hover:text-purple-800 p-2 hover:bg-purple-50 rounded shadow-sm bg-white border border-purple-100" title="Distribuir Cores"><ArrowRightLeft className="w-5 h-5" /></button>)}{isEditing ? (<button onClick={() => setEditingItemIdx(null)} className="text-green-600 hover:text-green-800 p-2 hover:bg-green-50 rounded bg-white shadow-sm"><Check className="w-5 h-5" /></button>) : (<button onClick={() => setEditingItemIdx(idx)} className="text-blue-500 hover:text-blue-700 p-2 hover:bg-blue-50 rounded"><Edit2 className="w-5 h-5" /></button>)}<button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded"><Trash className="w-5 h-5" /></button></div></td></tr>)})}</tbody></table></div>
                     
                     <div className="bg-orange-50 p-4 border-t border-orange-200 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div className="flex gap-6 items-center">
@@ -650,11 +773,84 @@ const AdminOrderList: React.FC = () => {
 
                     <div className="p-4 border-t bg-white rounded-b-lg flex flex-col md:flex-row justify-between items-center gap-3"><div className="text-xs text-gray-500 w-full md:w-auto text-center md:text-left">* Ao salvar, o estoque dos itens novos será baixado.</div><div className="flex gap-3 w-full md:w-auto justify-end"><button onClick={() => setPickingOrder(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Fechar</button><button onClick={savePickingSimple} disabled={savingPicking} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center shadow-sm disabled:opacity-50 font-bold">{savingPicking ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />} Salvar Progresso</button><button onClick={() => setShowRomaneioOptions(true)} disabled={savingPicking} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center shadow-sm disabled:opacity-50 font-bold"><Truck className="w-4 h-4 mr-2" /> Gerar Romaneio...</button></div></div>
                     {showRomaneioOptions && (<div className="absolute inset-0 bg-white bg-opacity-95 z-10 flex items-center justify-center p-6 rounded-lg animate-fade-in backdrop-blur-sm"><div className="bg-white border-2 border-green-500 rounded-lg shadow-2xl p-6 max-w-lg w-full"><h3 className="text-xl font-bold text-green-800 mb-2 flex items-center"><Truck className="w-6 h-6 mr-2" /> Gerar Romaneio & Finalizar</h3><p className="text-sm text-gray-600 mb-6">Escolha como deseja processar a entrega deste pedido.</p><div className="mb-6"><label className="block text-sm font-bold text-gray-700 mb-1">Número do Romaneio</label><input autoFocus type="text" className="w-full border-2 border-gray-300 rounded p-3 text-lg font-bold uppercase focus:ring-2 focus:ring-green-500 outline-none" placeholder="Digite o nº..." value={inputRomaneio} onChange={e => setInputRomaneio(e.target.value)} /></div><div className="space-y-3"><button onClick={handlePartialDelivery} disabled={!inputRomaneio || savingPicking} className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-lg flex items-center justify-between group transition disabled:opacity-50"><div className="text-left"><span className="block font-bold text-lg">Entrega Parcial</span><span className="text-xs opacity-90">Gera um novo pedido com os itens bipados. Mantém este aberto com o restante.</span></div><Split className="w-6 h-6 text-white opacity-80 group-hover:opacity-100" /></button><button onClick={handleFinalizeWithCancel} disabled={!inputRomaneio || savingPicking} className="w-full bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg flex items-center justify-between group transition disabled:opacity-50"><div className="text-left"><span className="block font-bold text-lg">Finalizar & Cancelar Restante</span><span className="text-xs opacity-90">Fecha o pedido com o que foi bipado. Remove/Cancela os itens não bipados.</span></div><Scissors className="w-6 h-6 text-white opacity-80 group-hover:opacity-100" /></button></div><div className="mt-4 pt-4 border-t text-center"><button onClick={() => setShowRomaneioOptions(false)} className="text-gray-500 hover:text-gray-800 underline">Voltar para separação</button></div></div></div>)}
+                    
+                    {/* MODAL DISTRIBUIÇÃO SORTIDO */}
+                    {sortidoItemIdx !== null && (
+                        <div className="absolute inset-0 bg-white bg-opacity-95 z-20 flex items-center justify-center p-6 rounded-lg animate-fade-in backdrop-blur-sm">
+                            <div className="bg-white border-2 border-purple-500 rounded-lg shadow-2xl p-6 max-w-xl w-full">
+                                <h3 className="text-xl font-bold text-purple-800 mb-2 flex items-center">
+                                    <ArrowRightLeft className="w-6 h-6 mr-2" /> Distribuir Cor (Item Sortido)
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Ref: <strong>{pickingItems[sortidoItemIdx].reference}</strong>. Escolha a cor real para enviar.
+                                    <br/>Isso removerá a quantidade do item "Sortido" e criará um item com a cor selecionada.
+                                </p>
+                                
+                                <div className="mb-4">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Cor Destino (Real)</label>
+                                    <select 
+                                        className="w-full border p-2 rounded focus:ring-2 focus:ring-purple-500"
+                                        value={sortidoTargetColor}
+                                        onChange={e => setSortidoTargetColor(e.target.value)}
+                                    >
+                                        <option value="">Selecione a cor...</option>
+                                        {products
+                                            .filter(p => p.reference === pickingItems[sortidoItemIdx].reference && p.color !== 'SORTIDO')
+                                            .map(p => <option key={p.color} value={p.color}>{p.color} (Est: {Object.values(p.stock).reduce((a,b)=>a+(b as number),0)})</option>)
+                                        }
+                                    </select>
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Quantidade a Mover</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {SIZE_GRIDS[pickingItems[sortidoItemIdx].gridType].map(size => {
+                                            const availableInSortido = pickingItems[sortidoItemIdx].sizes[size] || 0;
+                                            if (availableInSortido <= 0) return null;
+                                            
+                                            // Encontrar estoque real
+                                            const realProduct = products.find(p => p.reference === pickingItems[sortidoItemIdx].reference && p.color === sortidoTargetColor);
+                                            const realStock = realProduct?.stock?.[size] || 0;
+
+                                            return (
+                                                <div key={size} className="bg-gray-50 p-2 rounded border text-center w-20">
+                                                    <span className="block text-xs font-bold text-gray-500">{size}</span>
+                                                    <span className="text-[10px] text-purple-600 mb-1 block">Ped: {availableInSortido}</span>
+                                                    <input 
+                                                        type="number" 
+                                                        min="0"
+                                                        max={availableInSortido}
+                                                        className="w-full border text-center p-1 rounded focus:ring-purple-500 outline-none"
+                                                        value={sortidoDist[size] || ''}
+                                                        onChange={e => {
+                                                            let val = parseInt(e.target.value) || 0;
+                                                            if (val > availableInSortido) val = availableInSortido;
+                                                            setSortidoDist({...sortidoDist, [size]: val});
+                                                        }}
+                                                    />
+                                                    {sortidoTargetColor && (
+                                                        <span className={`text-[9px] block mt-1 ${realStock < (sortidoDist[size]||0) ? 'text-red-500 font-bold' : 'text-green-600'}`}>
+                                                            Est: {realStock}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2 border-t pt-4">
+                                    <button onClick={() => setSortidoItemIdx(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Cancelar</button>
+                                    <button onClick={handleConfirmSortidoDistribution} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-bold shadow-sm">Confirmar Distribuição</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
               </div>
           </div>
       )}
 
-      {showAggregation && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print p-2 md:p-4"><div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl"><div className="p-4 md:p-6 border-b flex justify-between items-center bg-purple-50"><div><h2 className="text-lg md:text-xl font-bold text-purple-900 flex items-center"><Calculator className="w-5 h-5 mr-2" /> Resumo de Produção</h2><p className="text-xs md:text-sm text-purple-600 mt-1">{selectedOrderIds.size} pedidos selecionados</p></div><button onClick={() => setShowAggregation(false)} className="p-2 hover:bg-purple-100 rounded-full"><X className="w-6 h-6 text-purple-800" /></button></div><div className="p-4 md:p-6 overflow-y-auto flex-1 overflow-x-auto"><table className="w-full text-sm border-collapse border border-gray-300 min-w-[700px]"><thead className="bg-gray-100"><tr><th className="border p-2 text-left">Ref</th><th className="border p-2 text-left">Cor</th>{ALL_SIZES.map(s => <th key={s} className="border p-2 text-center w-10">{s}</th>)}<th className="border p-2 text-right">Total</th></tr></thead><tbody>{aggregatedItems.map((item, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="border p-2 font-bold">{item.reference}</td><td className="border p-2 uppercase">{item.color}</td>{ALL_SIZES.map(s => (<td key={s} className="border p-2 text-center">{item.sizes[s] ? <span className="font-bold">{item.sizes[s]}</span> : <span className="text-gray-300">-</span>}</td>))}<td className="border p-2 text-right font-bold text-lg">{item.totalQty}</td></tr>))}</tbody><tfoot className="bg-purple-50 font-bold text-purple-900"><tr><td colSpan={2} className="border p-3 text-right">TOTAL:</td>{ALL_SIZES.map(s => { const colTotal = aggregatedItems.reduce((acc, i) => { const qty = (i.sizes && typeof i.sizes[s] === 'number') ? i.sizes[s] : 0; return acc + qty; }, 0); return <td key={s} className="border p-3 text-center">{colTotal || ''}</td> })}<td className="border p-3 text-right text-xl">{aggregatedItems.reduce((acc, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}</td></tr></tfoot></table></div><div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end"><button onClick={handlePrintAggregation} className="bg-blue-600 text-white px-6 py-3 md:py-2 rounded hover:bg-blue-700 flex items-center shadow-lg w-full md:w-auto justify-center"><Printer className="w-5 h-5 mr-2" /> Imprimir Lista</button></div></div></div>)}
+      {showAggregation && (<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print p-2 md:p-4"><div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl"><div className="p-4 md:p-6 border-b flex justify-between items-center bg-purple-50"><div><h2 className="text-lg md:text-xl font-bold text-purple-900 flex items-center"><Calculator className="w-5 h-5 mr-2" /> Resumo de Produção</h2><p className="text-xs md:text-sm text-purple-600 mt-1">{selectedOrderIds.size} pedidos selecionados</p></div><button onClick={() => setShowAggregation(false)} className="p-2 hover:bg-purple-100 rounded-full"><X className="w-6 h-6 text-purple-800" /></button></div><div className="p-4 md:p-6 overflow-y-auto flex-1 overflow-x-auto"><table className="w-full text-sm border-collapse border border-gray-300 min-w-[700px]"><thead className="bg-gray-100"><tr><th className="border p-2 text-left">Ref</th><th className="border p-2 text-left">Cor</th>{ALL_SIZES.map(s => <th key={s} className="border p-2 text-center w-10">{s}</th>)}<th className="border p-2 text-right">Total</th></tr></thead><tbody>{aggregatedItems.map((item, idx) => (<tr key={idx} className="hover:bg-gray-50"><td className="border p-2 font-bold">{item.reference}</td><td className="border p-2 uppercase">{item.color}</td>{ALL_SIZES.map(s => (<td key={s} className="border p-2 text-center">{item.sizes[s] ? <span className="font-bold">{item.sizes[s]}</span> : <span className="text-gray-300">-</span>}</td>))}<td className="border p-2 text-right font-bold text-lg">{item.totalQty}</td></tr>))}</tbody><tfoot className="bg-purple-50 font-bold text-purple-900"><tr><td colSpan={2} className="border p-3 text-right">TOTAL:</td>{ALL_SIZES.map(s => { const colTotal = aggregatedItems.reduce((acc: number, i) => { const qty = (i.sizes && typeof i.sizes[s] === 'number') ? i.sizes[s] : 0; return acc + qty; }, 0); return <td key={s} className="border p-3 text-center">{colTotal || ''}</td> })}<td className="border p-3 text-right text-xl">{aggregatedItems.reduce((acc: number, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}</td></tr></tfoot></table></div><div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end"><button onClick={handlePrintAggregation} className="bg-blue-600 text-white px-6 py-3 md:py-2 rounded hover:bg-blue-700 flex items-center shadow-lg w-full md:w-auto justify-center"><Printer className="w-5 h-5 mr-2" /> Imprimir Lista</button></div></div></div>)}
     </div>
   );
 };

@@ -80,10 +80,18 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
     if (currentRef) {
       const searchRef = currentRef.trim().toUpperCase();
 
-      const colors = products
+      // Cores reais do banco + SORTIDO
+      const dbColors = products
         .filter(p => p.reference === searchRef)
         .map(p => p.color);
-      setAvailableColors([...new Set(colors)]);
+      
+      const uniqueColors = [...new Set(dbColors)];
+      // Adiciona SORTIDO se não existir (sempre disponível)
+      if (!uniqueColors.includes('SORTIDO')) {
+          uniqueColors.push('SORTIDO');
+      }
+      
+      setAvailableColors(uniqueColors);
       
       // Tenta encontrar o produto para setar o grid corretamente se não estivermos editando
       if (editingIndex === null) {
@@ -171,17 +179,20 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
     }
 
     // 4. Validação de Estoque (Baseada nas quantidades FINAIS acumuladas)
+    // NOTA: Se for SORTIDO, ignoramos a validação de estoque aqui, pois será resolvido na separação.
     let stockError = '';
     
-    Object.entries(finalSizes).forEach(([size, totalQtyForSize]) => {
-        if (selectedProductData && selectedProductData.enforceStock) {
-            const availableInStock = selectedProductData.stock[size] || 0;
-            
-            if (totalQtyForSize > availableInStock) {
-                stockError = `Estoque insuficiente para o tamanho ${size}. (Solicitado Total: ${totalQtyForSize}, Disponível: ${availableInStock}).`;
+    if (currentColor !== 'SORTIDO') {
+        Object.entries(finalSizes).forEach(([size, totalQtyForSize]) => {
+            if (selectedProductData && selectedProductData.enforceStock) {
+                const availableInStock = selectedProductData.stock[size] || 0;
+                
+                if (totalQtyForSize > availableInStock) {
+                    stockError = `Estoque insuficiente para o tamanho ${size}. (Solicitado Total: ${totalQtyForSize}, Disponível: ${availableInStock}).`;
+                }
             }
-        }
-    });
+        });
+    }
 
     if (stockError) {
         setErrorMsg(stockError);
@@ -460,6 +471,11 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
                   )}
               </div>
           )}
+          {currentColor === 'SORTIDO' && (
+              <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded font-bold border border-purple-100 mb-1">
+                  Item Sortido: A cor será definida no despacho.
+              </div>
+          )}
 
           {/* Size Grid com Estoque */}
           <div>
@@ -468,8 +484,9 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
                 <div className="flex gap-2 min-w-max">
                     {SIZE_GRIDS[currentGrid]?.map(size => {
                         const stock = selectedProductData?.stock?.[size] || 0;
-                        const hasStock = stock > 0;
-                        const enforce = selectedProductData?.enforceStock;
+                        // Se for Sortido, fingimos que tem estoque para permitir o pedido
+                        const hasStock = currentColor === 'SORTIDO' ? true : (stock > 0);
+                        const enforce = selectedProductData?.enforceStock && currentColor !== 'SORTIDO';
                         
                         return (
                         <div key={size} className="w-16">
@@ -486,8 +503,8 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
                                     if(e.key === 'Enter') handleAddItem(e);
                                 }}
                             />
-                            {/* Stock Indicator */}
-                            {selectedProductData && (
+                            {/* Stock Indicator - Só mostra se não for sortido */}
+                            {selectedProductData && currentColor !== 'SORTIDO' && (
                                 <div className={`text-[10px] text-center mt-1 font-bold ${hasStock ? 'text-green-600' : 'text-red-500'}`}>
                                     Est: {stock}
                                 </div>
@@ -563,6 +580,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
                       <td className="p-3">
                         <span className="block font-bold text-gray-800">{item.reference}</span>
                         <span className="text-xs uppercase text-gray-500">{item.color}</span>
+                        {item.color === 'SORTIDO' && <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded ml-1">MIX</span>}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex justify-center gap-1 flex-wrap">
@@ -599,7 +617,9 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated }) => {
                         <div className="flex justify-between items-start mb-2 border-b pb-2">
                             <div>
                                 <span className="block font-bold text-gray-800 text-lg">{item.reference}</span>
-                                <span className="block text-xs text-gray-500 uppercase">{item.color}</span>
+                                <span className="block text-xs text-gray-500 uppercase">
+                                    {item.color} {item.color === 'SORTIDO' && <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded ml-1">MIX</span>}
+                                </span>
                             </div>
                             <div className="text-right">
                                 <span className="block font-bold text-blue-600 text-lg">{item.totalQty} pçs</span>
