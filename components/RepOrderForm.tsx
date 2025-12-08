@@ -361,7 +361,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
             clientState: client.state,
             deliveryDate,
             paymentMethod,
-            romaneio: romaneio, 
+            romaneio: romaneio, // Mantido na lógica para preservar caso já exista, mas sem input
             status: 'open' as const,
             items,
             totalPieces: items.reduce((acc, i) => acc + i.totalQty, 0),
@@ -435,8 +435,8 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
           </div>
         </div>
         
-        {/* Nova grid de 3 colunas para incluir o Romaneio */}
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Nova grid de 2 colunas (Removido Romaneio) */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Data Entrega</label>
               <input 
@@ -454,16 +454,6 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
                   placeholder="Ex: 30/60 dias"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nº Romaneio</label>
-              <input 
-                  type="text" 
-                  className="w-full border rounded p-2 focus:ring-2 focus:ring-blue-500 outline-none font-bold"
-                  placeholder="Opcional"
-                  value={romaneio}
-                  onChange={(e) => setRomaneio(e.target.value)}
               />
             </div>
         </div>
