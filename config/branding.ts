@@ -3,7 +3,7 @@ import { Shirt } from 'lucide-react';
 
 export const BRANDING = {
   // Nome que aparece no navegador e no topo do menu
-  appName: "Fábrica System",
+  appName: "Kavin's Gestão Pedidos",
   
   // Nome da empresa (usado em relatórios impressos e rodapés)
   companyName: "Kavin's",
