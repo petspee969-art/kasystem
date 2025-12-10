@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, ProductDef, OrderItem, Client, SizeGridType, SIZE_GRIDS, Order } from '../types';
 import { getProducts, getClients, addOrder, getRepPrices, generateUUID, updateOrderFull } from '../services/storageService';
-import { Plus, Trash, Save, Edit2, Loader2, ChevronDown, Check, DollarSign, Calculator, Tag, AlertTriangle, Lock } from 'lucide-react';
+import { Plus, Trash, Save, Edit2, Loader2, ChevronDown, Check, DollarSign, Calculator, Tag, AlertTriangle, Lock, MessageSquare } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -30,6 +30,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
   // Item Entry State
   const [currentRef, setCurrentRef] = useState('');
   const [currentColor, setCurrentColor] = useState('');
+  const [currentObs, setCurrentObs] = useState(''); // Estado para observação do item
   const [currentGrid, setCurrentGrid] = useState<SizeGridType>(SizeGridType.ADULT);
   const [manualUnitPrice, setManualUnitPrice] = useState<string>(''); 
   
@@ -107,6 +108,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
       setQuickSizes({});
       setCurrentRef('');
       setCurrentColor('');
+      setCurrentObs('');
       setManualUnitPrice('');
   };
 
@@ -160,10 +162,15 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
           const searchColor = currentColor.trim().toUpperCase();
           const prod = products.find(p => p.reference === searchRef && p.color === searchColor);
           setSelectedProductData(prod || null);
+          
+          // Limpa obs se mudar de sortido para cor normal, a menos que esteja editando
+          if (editingIndex === null && searchColor !== 'SORTIDO') {
+              setCurrentObs('');
+          }
       } else {
           setSelectedProductData(null);
       }
-  }, [currentRef, currentColor, products]);
+  }, [currentRef, currentColor, products, editingIndex]);
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +203,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
 
     // 3. Define as quantidades FINAIS (Fusão ou Novo)
     const finalSizes: {[key: string]: number} = {};
+    let finalObservation = currentColor === 'SORTIDO' ? currentObs : undefined;
     
     if (duplicateIndex !== -1 && editingIndex === null) {
         // CASO FUSÃO: O item já existe, vamos somar as quantidades
@@ -203,6 +211,15 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
         
         // Copia quantidades existentes
         Object.assign(finalSizes, existingItem.sizes);
+        
+        // Mantém observação existente se a nova estiver vazia, ou concatena
+        if (existingItem.color === 'SORTIDO') {
+             if (currentObs && existingItem.observation && currentObs !== existingItem.observation) {
+                 finalObservation = `${existingItem.observation} / ${currentObs}`;
+             } else if (existingItem.observation) {
+                 finalObservation = existingItem.observation;
+             }
+        }
         
         // Soma as novas quantidades
         Object.entries(inputSizes).forEach(([size, qty]) => {
@@ -264,7 +281,8 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
       sizes: finalSizes,
       totalQty: finalTotalQty,
       unitPrice: finalUnitPrice,
-      totalItemValue: finalTotalQty * finalUnitPrice
+      totalItemValue: finalTotalQty * finalUnitPrice,
+      observation: finalObservation
     };
 
     // 6. Atualiza o Estado (Lista de Itens)
@@ -290,6 +308,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
     // Limpeza padrão do formulário de entrada
     setQuickSizes({});
     setCurrentColor('');
+    setCurrentObs('');
     // Mantém a Referência e o Preço para facilitar digitação de várias cores do mesmo modelo
   };
 
@@ -300,6 +319,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
     setCurrentColor(item.color);
     setCurrentGrid(item.gridType);
     setManualUnitPrice(item.unitPrice.toString());
+    setCurrentObs(item.observation || '');
     
     const sizeStrings: {[key: string]: string} = {};
     Object.entries(item.sizes).forEach(([k, v]) => {
@@ -320,6 +340,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
         setCurrentColor('');
         setCurrentRef('');
         setManualUnitPrice('');
+        setCurrentObs('');
       }
     }
   };
@@ -528,9 +549,23 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
                   )}
               </div>
           )}
+          
           {currentColor === 'SORTIDO' && (
-              <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded font-bold border border-purple-100 mb-1">
-                  Item Sortido: A cor será definida no despacho.
+              <div className="flex flex-col gap-2 bg-purple-50 p-3 rounded border border-purple-100 mb-1">
+                  <div className="text-xs text-purple-700 font-bold flex items-center">
+                      <MessageSquare className="w-4 h-4 mr-1" />
+                      Item Sortido: A cor será definida no despacho.
+                  </div>
+                  <div>
+                      <label className="block text-xs font-bold text-purple-800 mb-1">Observação do Sortido</label>
+                      <input 
+                          type="text" 
+                          className="w-full border border-purple-300 rounded p-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                          placeholder="Ex: Menos verde, preferência azul marinho..."
+                          value={currentObs}
+                          onChange={(e) => setCurrentObs(e.target.value)}
+                      />
+                  </div>
               </div>
           )}
 
@@ -594,6 +629,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
                     setCurrentColor('');
                     setCurrentRef('');
                     setManualUnitPrice('');
+                    setCurrentObs('');
                 }}
                 className="bg-gray-400 text-white p-3 rounded font-bold hover:bg-gray-500 w-24"
                 >
@@ -638,6 +674,11 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
                         <span className="block font-bold text-gray-800">{item.reference}</span>
                         <span className="text-xs uppercase text-gray-500">{item.color}</span>
                         {item.color === 'SORTIDO' && <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded ml-1">MIX</span>}
+                        {item.observation && (
+                            <div className="text-[10px] text-purple-700 bg-purple-50 p-1 rounded mt-1 border border-purple-100 flex items-start">
+                                <MessageSquare className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" /> {item.observation}
+                            </div>
+                        )}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex justify-center gap-1 flex-wrap">
@@ -685,6 +726,13 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
                                 </span>
                             </div>
                         </div>
+                        
+                        {item.observation && (
+                            <div className="mb-2 text-[10px] text-purple-700 bg-purple-50 p-1.5 rounded border border-purple-100 flex items-start">
+                                <MessageSquare className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" /> 
+                                <span className="font-medium">Obs: {item.observation}</span>
+                            </div>
+                        )}
                         
                         <div className="grid grid-cols-4 gap-2 text-xs mb-3">
                             {Object.entries(item.sizes).map(([size, qty]) => (

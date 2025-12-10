@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
-import { Package, Clock, CheckCircle, Search, Eye, X, Loader2, Printer, CheckCheck, Pencil } from 'lucide-react';
+import { Package, Clock, CheckCircle, Search, Eye, X, Loader2, Printer, CheckCheck, Pencil, MessageSquare } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 
 interface Props {
@@ -61,11 +61,14 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
         const rowValue = rowTotal * item.unitPrice;
         calculatedSubtotal += rowValue;
 
+        const obsHtml = item.observation ? `<br/><span style="font-size: 10px; font-weight: bold; background-color: #f3f4f6; padding: 2px;">Obs: ${item.observation}</span>` : '';
+
         return `
         <tr>
             <td class="p-2">
                 <strong>${item.reference}</strong><br/>
                 <span class="uppercase text-xs">${item.color}</span>
+                ${obsHtml}
             </td>
             ${cellsHtml}
             <td class="text-right font-bold p-2">${rowTotal}</td>
@@ -399,7 +402,14 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
                                      return (
                                         <tr key={idx}>
                                             <td className="border p-2 font-medium">{item.reference}</td>
-                                            <td className="border p-2">{item.color}</td>
+                                            <td className="border p-2">
+                                                {item.color}
+                                                {item.observation && (
+                                                    <div className="text-[10px] text-purple-700 bg-purple-50 p-1 rounded mt-1 border border-purple-100 flex items-start">
+                                                        <MessageSquare className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" /> {item.observation}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="border p-2 text-center">
                                                 {/* Visualização de Grade */}
                                                 {ALL_SIZES.map(s => {

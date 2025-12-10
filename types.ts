@@ -52,6 +52,7 @@ export interface OrderItem {
   totalQty: number;
   unitPrice: number; // Preço unitário no momento da venda
   totalItemValue: number; // unitPrice * totalQty
+  observation?: string; // Campo para observações do item (ex: para itens Sortidos)
 }
 
 export interface Order {
