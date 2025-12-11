@@ -31,12 +31,14 @@ const AdminCutForecast: React.FC = () => {
       let hasNeed = false;
 
       sizes.forEach(size => {
-          const current = p.stock[size] || 0;
-          const min = p.minStock[size] || 0;
+          // Conversão explícita para Number para evitar erros com strings do banco
+          // Usa Optional Chaining (?.) para evitar erro se o objeto stock ou minStock for undefined
+          const current = Number(p.stock?.[size]) || 0;
+          const min = Number(p.minStock?.[size]) || 0;
           
           // Cálculo: Meta - Atual. 
           // Se atual for negativo (venda sem estoque), soma-se a necessidade para cobrir o buraco e atingir o mínimo.
-          // Ex: Min 10, Atual -5 -> Precisa de 15.
+          // Ex: Min 25, Atual 10 -> Gap 15.
           const gap = min - current;
           
           const qtyToCut = gap > 0 ? gap : 0;
@@ -157,11 +159,9 @@ const AdminCutForecast: React.FC = () => {
                                         <div className="flex flex-wrap justify-center gap-3">
                                             {SIZE_GRIDS[item.gridType].map(size => {
                                                 const qty = item.cutNeeds[size] || 0;
-                                                const current = item.stock[size] || 0;
-                                                const min = item.minStock[size] || 0;
+                                                const current = Number(item.stock?.[size]) || 0;
+                                                const min = Number(item.minStock?.[size]) || 0;
                                                 
-                                                // Só exibe o box se tiver necessidade ou se for para completar a visualização da linha
-                                                // Mas para economizar tinta e focar, vamos destacar os que PRECISAM
                                                 const needsAction = qty > 0;
 
                                                 return (
