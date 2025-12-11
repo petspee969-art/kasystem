@@ -661,7 +661,7 @@ const AdminOrderList: React.FC = () => {
   const handlePrintAggregation = () => {
     const win = window.open('', '', 'height=800,width=1000');
     if (!win) return;
-    const totalPieces = aggregatedItems.reduce((acc, i) => acc + i.totalQty, 0);
+    const totalPieces = aggregatedItems.reduce<number>((acc, i) => acc + (i.totalQty || 0), 0);
     const dateRange = startDate && endDate ? `Período: ${new Date(startDate).toLocaleDateString()} até ${new Date(endDate).toLocaleDateString()}` : 'Relatório Geral';
     const sizeTotals: Record<string, number> = {};
     ALL_SIZES.forEach(s => sizeTotals[s] = 0);

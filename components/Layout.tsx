@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, Role } from '../types';
-import { LogOut, LayoutDashboard, ShoppingCart, Users, Package, Shirt, Menu, X, DollarSign, FileBarChart, PieChart, Archive } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShoppingCart, Users, Package, Shirt, Menu, X, DollarSign, FileBarChart, PieChart, Archive, Scissors } from 'lucide-react';
 import { BRANDING } from '../config/branding';
 
 interface LayoutProps {
@@ -62,6 +62,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
           {isAdmin ? (
             <>
               <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard Geral" />
+              <NavItem id="cut-forecast" icon={Scissors} label="Previsão de Corte" />
               <NavItem id="reports" icon={FileBarChart} label="Relatórios & Matriz" />
               <NavItem id="stock-report" icon={Archive} label="Relatório de Estoque" />
               <NavItem id="orders" icon={Package} label="Pedidos & Produção" />
@@ -109,6 +110,7 @@ const Layout: React.FC<LayoutProps> = ({ user, onLogout, children, activeTab, se
             {isAdmin ? (
               <>
                 <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+                <NavItem id="cut-forecast" icon={Scissors} label="Previsão de Corte" />
                 <NavItem id="reports" icon={FileBarChart} label="Relatórios" />
                 <NavItem id="stock-report" icon={Archive} label="Relat. Estoque" />
                 <NavItem id="orders" icon={Package} label="Pedidos" />

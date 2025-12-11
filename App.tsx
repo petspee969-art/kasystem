@@ -13,7 +13,8 @@ import RepPriceManager from './components/RepPriceManager';
 import AdminReports from './components/AdminReports';
 import RepReports from './components/RepReports';
 import StockReport from './components/StockReport';
-import RepStockView from './components/RepStockView'; // Novo import
+import RepStockView from './components/RepStockView';
+import AdminCutForecast from './components/AdminCutForecast'; // Novo import
 import { User, Role, Order } from './types';
 import { initializeStorage } from './services/storageService';
 
@@ -80,6 +81,7 @@ const App: React.FC = () => {
       {user.role === Role.ADMIN && (
         <>
           {activeTab === 'dashboard' && <AdminDashboard onNavigate={setActiveTab} />}
+          {activeTab === 'cut-forecast' && <AdminCutForecast />}
           {activeTab === 'reports' && <AdminReports />}
           {activeTab === 'stock-report' && <StockReport />}
           {activeTab === 'orders' && <AdminOrderList />}
