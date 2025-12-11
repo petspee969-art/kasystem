@@ -922,7 +922,7 @@ const AdminOrderList: React.FC = () => {
                   <tr>
                     <td colSpan={2} className="border p-3 text-right">TOTAL:</td>
                     {ALL_SIZES.map(s => {
-                      const colTotal = aggregatedItems.reduce((acc: number, i) => {
+                      const colTotal = aggregatedItems.reduce<number>((acc, i) => {
                         const val = i.sizes && i.sizes[s];
                         const qty = typeof val === 'number' ? val : 0;
                         return acc + qty;
@@ -930,7 +930,7 @@ const AdminOrderList: React.FC = () => {
                       return <td key={s} className="border p-3 text-center">{colTotal || ''}</td>
                     })}
                     <td className="border p-3 text-right text-xl">
-                      {aggregatedItems.reduce((acc: number, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}
+                      {aggregatedItems.reduce<number>((acc, i) => acc + (typeof i.totalQty === 'number' ? i.totalQty : 0), 0)}
                     </td>
                   </tr>
                 </tfoot>

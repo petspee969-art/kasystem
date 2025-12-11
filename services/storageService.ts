@@ -59,6 +59,7 @@ export const getProducts = async (): Promise<ProductDef[]> => {
     color: p.color,
     gridType: p.grid_type || p.gridType,
     stock: p.stock || {}, 
+    minStock: p.min_stock || {}, // Mapeia min_stock
     enforceStock: !!p.enforce_stock,
     basePrice: typeof p.base_price === 'string' ? parseFloat(p.base_price) : (p.base_price || 0)
   })) as ProductDef[];
@@ -71,6 +72,7 @@ export const addProduct = async (prod: ProductDef): Promise<void> => {
     color: prod.color,
     grid_type: prod.gridType,
     stock: prod.stock,
+    min_stock: prod.minStock, // Salva minStock
     enforce_stock: prod.enforceStock ? 1 : 0,
     base_price: prod.basePrice
   };
@@ -82,12 +84,33 @@ export const addProduct = async (prod: ProductDef): Promise<void> => {
   });
 };
 
-export const updateProductInventory = async (id: string, newStock: any, enforceStock: boolean, basePrice: number): Promise<void> => {
+export const updateProductInventory = async (id: string, newStock: any, enforceStock: boolean, basePrice: number, minStock: any = null): Promise<void> => {
+    // Se minStock não for passado (em chamadas antigas ou updates parciais), buscamos o atual?
+    // Para simplificar, a API espera o objeto completo ou faz merge. No backend atual (PUT), substituimos tudo.
+    // Portanto, o frontend deve passar o minStock atual se não quiser alterá-lo.
+    
+    // NOTA: Se minStock for null, a API pode falhar se não tratada.
+    // O ideal é que quem chama essa função passe o minStock.
+    // Se a chamada vier de um lugar que não sabe o minStock (ex: vendas), precisamos lidar com isso.
+    
+    // Melhor abordagem aqui para Vendas: Se minStock for undefined/null, precisamos ler do produto atual antes de salvar?
+    // O endpoint PUT no server.js espera todos os campos.
+    
+    let finalMinStock = minStock;
+    if (!finalMinStock) {
+        // Se não fornecido, busca o produto atual para preservar o minStock
+        const res = await fetch(`${API_URL}/products`); // Ineficiente mas seguro para este arquitetura local
+        const all = await handleResponse(res);
+        const current = all.find((p:any) => p.id === id);
+        finalMinStock = current ? (current.min_stock || {}) : {};
+    }
+
     await fetch(`${API_URL}/products/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             stock: newStock, 
+            min_stock: finalMinStock,
             enforce_stock: enforceStock ? 1 : 0,
             base_price: basePrice
         })
@@ -125,7 +148,7 @@ export const updateStockOnOrderCreation = async (items: OrderItem[], reverse: bo
             });
 
             if (changed) {
-                await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice);
+                await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice, product.minStock);
             }
         }
     }
@@ -241,7 +264,7 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
             });
 
             if (stockChanged) {
-                 await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice);
+                 await updateProductInventory(product.id, newStock, product.enforceStock, product.basePrice, product.minStock);
             }
         }
     }
@@ -551,7 +574,7 @@ export const deleteOrder = async (orderId: string): Promise<void> => {
             });
 
             if (hasChange) {
-                await updateProductInventory(product.id, currentStock, product.enforceStock, product.basePrice);
+                await updateProductInventory(product.id, currentStock, product.enforceStock, product.basePrice, product.minStock);
             }
         }
     }

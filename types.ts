@@ -23,6 +23,7 @@ export interface ProductDef {
   color: string;
   gridType: SizeGridType;
   stock: { [size: string]: number }; // Estoque por tamanho ex: { "P": 10, "M": 5 }
+  minStock: { [size: string]: number }; // NOVO: Estoque Mínimo por tamanho
   enforceStock: boolean; // Se true, não deixa vender sem estoque
   basePrice: number; // Novo campo: Preço de Custo/Base para relatórios administrativos
 }

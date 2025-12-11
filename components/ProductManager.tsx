@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ProductDef, SizeGridType, SIZE_GRIDS } from '../types';
 import { getProducts, addProduct, deleteProduct, updateProductInventory, generateUUID } from '../services/storageService';
-import { Trash, Plus, Loader2, Package, Edit2, X, Save, ArrowDownToLine, Check, Layers, Ruler } from 'lucide-react';
+import { Trash, Plus, Loader2, Package, Edit2, X, Save, ArrowDownToLine, Check, Layers, Ruler, AlertTriangle } from 'lucide-react';
 
 const ProductManager: React.FC = () => {
   const [products, setProducts] = useState<ProductDef[]>([]);
@@ -13,11 +13,13 @@ const ProductManager: React.FC = () => {
   
   // Novos estados para cadastro de estoque
   const [initialStock, setInitialStock] = useState<{[key: string]: string}>({});
+  const [minStockValues, setMinStockValues] = useState<{[key: string]: string}>({}); // NOVO: Mínimo
   const [enforceStock, setEnforceStock] = useState(false);
 
   // Estados para EDIÇÃO
   const [editingProduct, setEditingProduct] = useState<ProductDef | null>(null);
   const [editStockValues, setEditStockValues] = useState<{[key: string]: string}>({});
+  const [editMinStockValues, setEditMinStockValues] = useState<{[key: string]: string}>({}); // NOVO: Mínimo Edição
   const [editEnforceStock, setEditEnforceStock] = useState(false);
   const [editBasePrice, setEditBasePrice] = useState(''); 
 
@@ -50,6 +52,7 @@ const ProductManager: React.FC = () => {
   // Limpa os inputs de estoque quando muda a grade (Cadastro)
   useEffect(() => {
     setInitialStock({});
+    setMinStockValues({});
   }, [newGrid]);
 
   // Limpa filtros do modal ao fechar ou abrir
@@ -104,9 +107,14 @@ const ProductManager: React.FC = () => {
 
     // Converte inputs de estoque para números
     const finalStock: {[key: string]: number} = {};
+    const finalMinStock: {[key: string]: number} = {};
+
     SIZE_GRIDS[newGrid].forEach(size => {
         const val = parseInt(initialStock[size] || '0');
         if (val > 0) finalStock[size] = val;
+
+        const minVal = parseInt(minStockValues[size] || '0');
+        if (minVal > 0) finalMinStock[size] = minVal;
     });
 
     try {
@@ -116,6 +124,7 @@ const ProductManager: React.FC = () => {
             color: newColor.toUpperCase(),
             gridType: newGrid,
             stock: finalStock,
+            minStock: finalMinStock,
             enforceStock: enforceStock,
             basePrice: parseFloat(newBasePrice) || 0
         });
@@ -124,6 +133,7 @@ const ProductManager: React.FC = () => {
         // Não limpa newRef para agilizar cadastro de cores
         setNewColor('');
         setInitialStock({});
+        setMinStockValues({});
         setNewBasePrice('');
     } catch (e: any) {
         setError('Erro: ' + e.message);
@@ -143,14 +153,23 @@ const ProductManager: React.FC = () => {
     setEditEnforceStock(product.enforceStock);
     setEditBasePrice(product.basePrice ? product.basePrice.toString() : '');
     
-    // Converte o estoque atual (number) para string para os inputs
+    // Converte o estoque atual e mínimo para string
     const stockStrings: {[key: string]: string} = {};
+    const minStockStrings: {[key: string]: string} = {};
+
     if (product.stock) {
         Object.entries(product.stock).forEach(([key, val]) => {
             stockStrings[key] = val.toString();
         });
     }
+    if (product.minStock) {
+        Object.entries(product.minStock).forEach(([key, val]) => {
+            minStockStrings[key] = val.toString();
+        });
+    }
+
     setEditStockValues(stockStrings);
+    setEditMinStockValues(minStockStrings);
   };
 
   const handleSaveEdit = async () => {
@@ -159,14 +178,19 @@ const ProductManager: React.FC = () => {
     
     try {
         const finalStock: {[key: string]: number} = {};
+        const finalMinStock: {[key: string]: number} = {};
+
         SIZE_GRIDS[editingProduct.gridType].forEach(size => {
             const val = parseInt(editStockValues[size] || '0');
             if (!isNaN(val)) finalStock[size] = val;
+
+            const minVal = parseInt(editMinStockValues[size] || '0');
+            if (!isNaN(minVal) && minVal > 0) finalMinStock[size] = minVal;
         });
 
         const finalBasePrice = parseFloat(editBasePrice) || 0;
 
-        await updateProductInventory(editingProduct.id, finalStock, editEnforceStock, finalBasePrice);
+        await updateProductInventory(editingProduct.id, finalStock, editEnforceStock, finalBasePrice, finalMinStock);
         
         await fetchData();
         setEditingProduct(null);
@@ -218,7 +242,8 @@ const ProductManager: React.FC = () => {
               activeEntryProduct.id, 
               currentStock, 
               activeEntryProduct.enforceStock, 
-              activeEntryProduct.basePrice
+              activeEntryProduct.basePrice,
+              activeEntryProduct.minStock
           );
           
           await fetchData();
@@ -313,11 +338,11 @@ const ProductManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Área de Estoque Inicial */}
+          {/* Área de Estoque Inicial & Mínimo */}
           <div className="bg-gray-50 p-4 rounded border border-gray-200">
              <div className="flex justify-between items-center mb-2">
                  <h4 className="text-sm font-bold text-gray-700 flex items-center">
-                    <Package className="w-4 h-4 mr-2" /> Estoque Inicial
+                    <Package className="w-4 h-4 mr-2" /> Estoque Inicial & Mínimo (Meta)
                  </h4>
                  <label className="flex items-center text-sm cursor-pointer select-none">
                     <input 
@@ -334,20 +359,36 @@ const ProductManager: React.FC = () => {
              
              <div className="flex flex-wrap gap-4">
                 {SIZE_GRIDS[newGrid].map(size => (
-                    <div key={size} className="w-20">
-                        <label className="block text-xs font-bold text-center mb-1 text-gray-500">{size}</label>
-                        <input 
-                            type="number"
-                            min="0"
-                            className="w-full border p-2 text-center rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="0"
-                            value={initialStock[size] || ''}
-                            onChange={(e) => setInitialStock({...initialStock, [size]: e.target.value})}
-                        />
+                    <div key={size} className="w-24 bg-white p-2 rounded border border-gray-200 shadow-sm">
+                        <label className="block text-xs font-bold text-center mb-2 text-gray-700 bg-gray-100 rounded">{size}</label>
+                        
+                        <div className="mb-2">
+                            <label className="block text-[9px] text-gray-500">Atual</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                className="w-full border border-gray-300 p-1 text-center rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                placeholder="0"
+                                value={initialStock[size] || ''}
+                                onChange={(e) => setInitialStock({...initialStock, [size]: e.target.value})}
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-[9px] text-orange-600 font-bold">Mínimo</label>
+                            <input 
+                                type="number"
+                                min="0"
+                                className="w-full border border-orange-200 bg-orange-50 p-1 text-center rounded text-sm focus:ring-1 focus:ring-orange-500"
+                                placeholder="0"
+                                value={minStockValues[size] || ''}
+                                onChange={(e) => setMinStockValues({...minStockValues, [size]: e.target.value})}
+                            />
+                        </div>
                     </div>
                 ))}
              </div>
-             <p className="text-xs text-gray-400 mt-2">Deixe em branco ou 0 para iniciar sem estoque.</p>
+             <p className="text-xs text-gray-400 mt-2">Defina o estoque físico atual e, opcionalmente, o mínimo desejado para cálculo de corte.</p>
           </div>
 
           <button 
@@ -404,13 +445,19 @@ const ProductManager: React.FC = () => {
                                 <div className="text-xs mt-1 flex flex-wrap gap-1">
                                     {SIZE_GRIDS[prod.gridType].map((size) => {
                                         const qty = prod.stock?.[size] || 0;
+                                        const min = prod.minStock?.[size] || 0;
+                                        const isLow = min > 0 && qty < min;
+
                                         // Estilo condicional para facilitar a leitura
                                         let badgeStyle = "bg-gray-100 text-gray-400";
                                         if (qty > 0) badgeStyle = "bg-green-50 text-green-700 border border-green-200 font-bold";
                                         if (qty < 0) badgeStyle = "bg-red-50 text-red-600 border border-red-200 font-bold";
                                         
+                                        // Borda laranja se estiver abaixo do mínimo
+                                        if (isLow) badgeStyle += " ring-2 ring-orange-400";
+
                                         return (
-                                            <span key={size} className={`px-1.5 py-0.5 rounded ${badgeStyle}`}>
+                                            <span key={size} className={`px-1.5 py-0.5 rounded ${badgeStyle}`} title={min > 0 ? `Mínimo: ${min}` : undefined}>
                                                 {size}: {qty}
                                             </span>
                                         );
@@ -598,7 +645,7 @@ const ProductManager: React.FC = () => {
       {/* MODAL DE EDIÇÃO */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-lg shadow-xl animate-fade-in">
+            <div className="bg-white rounded-lg w-full max-w-lg shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
                     <h3 className="font-bold text-lg text-gray-800 flex items-center">
                         <Edit2 className="w-5 h-5 mr-2 text-blue-600" />
@@ -646,18 +693,33 @@ const ProductManager: React.FC = () => {
                              </label>
                         </div>
                         
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className="flex flex-wrap gap-4">
                             {SIZE_GRIDS[editingProduct.gridType].map(size => (
-                                <div key={size}>
-                                    <label className="block text-xs font-bold text-center mb-1 text-gray-500">{size}</label>
-                                    <input 
-                                        type="number"
-                                        // Sem min="0" para permitir ajustes negativos manuais se necessário
-                                        className="w-full border p-2 text-center rounded focus:ring-2 focus:ring-blue-500"
-                                        value={editStockValues[size] || ''}
-                                        onChange={(e) => setEditStockValues({...editStockValues, [size]: e.target.value})}
-                                        placeholder="0"
-                                    />
+                                <div key={size} className="w-24 bg-white p-2 rounded border border-gray-200 shadow-sm">
+                                    <label className="block text-xs font-bold text-center mb-2 text-gray-700 bg-gray-100 rounded">{size}</label>
+                                    
+                                    <div className="mb-2">
+                                        <label className="block text-[9px] text-gray-500">Atual</label>
+                                        <input 
+                                            type="number"
+                                            className="w-full border border-gray-300 p-1 text-center rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                            value={editStockValues[size] || ''}
+                                            onChange={(e) => setEditStockValues({...editStockValues, [size]: e.target.value})}
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-[9px] text-orange-600 font-bold">Mínimo</label>
+                                        <input 
+                                            type="number"
+                                            min="0"
+                                            className="w-full border border-orange-200 bg-orange-50 p-1 text-center rounded text-sm focus:ring-1 focus:ring-orange-500"
+                                            placeholder="0"
+                                            value={editMinStockValues[size] || ''}
+                                            onChange={(e) => setEditMinStockValues({...editMinStockValues, [size]: e.target.value})}
+                                        />
+                                    </div>
                                 </div>
                             ))}
                         </div>

@@ -48,6 +48,7 @@ const INIT_SQL = `
         color VARCHAR(50),
         grid_type VARCHAR(20),
         stock JSON,
+        min_stock JSON,
         enforce_stock BOOLEAN DEFAULT 0,
         base_price DECIMAL(10, 2) DEFAULT 0
     );
@@ -110,6 +111,19 @@ async function initDB() {
         
         console.log('🔄 Conectado! Verificando banco de dados...');
         await connection.query(INIT_SQL);
+        
+        // --- MIGRAÇÃO SEGURA PARA COLUNA min_stock ---
+        try {
+            await connection.query(`
+                SELECT min_stock FROM products LIMIT 1;
+            `);
+        } catch (e) {
+            console.log("⚠️ Coluna 'min_stock' não encontrada. Criando...");
+            await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
+            console.log("✅ Coluna 'min_stock' criada com sucesso.");
+        }
+        // ----------------------------------------------
+
         console.log('✅ Banco de dados configurado com sucesso.');
         console.log('✅ Usuário ADMIN garantido (Login: admin / Senha: admin)');
         
@@ -181,7 +195,8 @@ app.get('/api/products', async (req, res) => {
         const [rows] = await pool.query('SELECT * FROM products');
         const products = rows.map(p => ({
             ...p,
-            stock: typeof p.stock === 'string' ? JSON.parse(p.stock) : p.stock,
+            stock: typeof p.stock === 'string' ? JSON.parse(p.stock) : (p.stock || {}),
+            min_stock: typeof p.min_stock === 'string' ? JSON.parse(p.min_stock) : (p.min_stock || {}),
             enforce_stock: !!p.enforce_stock,
             base_price: parseFloat(p.base_price)
         }));
@@ -194,7 +209,11 @@ app.get('/api/products', async (req, res) => {
 app.post('/api/products', async (req, res) => {
     try {
         const data = req.body;
-        const dbData = { ...data, stock: JSON.stringify(data.stock) };
+        const dbData = { 
+            ...data, 
+            stock: JSON.stringify(data.stock),
+            min_stock: JSON.stringify(data.min_stock || {})
+        };
         await pool.query('INSERT INTO products SET ?', dbData);
         res.json({ success: true });
     } catch (err) {
@@ -204,10 +223,10 @@ app.post('/api/products', async (req, res) => {
 
 app.put('/api/products/:id', async (req, res) => {
     try {
-        const { stock, enforce_stock, base_price } = req.body;
+        const { stock, min_stock, enforce_stock, base_price } = req.body;
         await pool.query(
-            'UPDATE products SET stock = ?, enforce_stock = ?, base_price = ? WHERE id = ?',
-            [JSON.stringify(stock), enforce_stock, base_price, req.params.id]
+            'UPDATE products SET stock = ?, min_stock = ?, enforce_stock = ?, base_price = ? WHERE id = ?',
+            [JSON.stringify(stock), JSON.stringify(min_stock || {}), enforce_stock, base_price, req.params.id]
         );
         res.json({ success: true });
     } catch (err) {
