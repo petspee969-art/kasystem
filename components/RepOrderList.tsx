@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
@@ -61,19 +60,18 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
         const rowValue = rowTotal * item.unitPrice;
         calculatedSubtotal += rowValue;
 
-        const obsHtml = item.observation ? `<br/><span style="font-size: 10px; font-weight: bold; background-color: #f3f4f6; padding: 2px;">Obs: ${item.observation}</span>` : '';
+        const obsHtml = item.observation ? `<br/><span style="font-size: 9px; font-weight: bold; background-color: #f3f4f6; padding: 1px;">Obs: ${item.observation}</span>` : '';
 
         return `
         <tr>
-            <td class="p-2">
-                <strong>${item.reference}</strong><br/>
-                <span class="uppercase text-xs">${item.color}</span>
+            <td class="p-1">
+                <strong>${item.reference}</strong> - <span class="uppercase">${item.color}</span>
                 ${obsHtml}
             </td>
             ${cellsHtml}
-            <td class="text-right font-bold p-2">${rowTotal}</td>
-            <td class="text-right p-2">${item.unitPrice.toFixed(2)}</td>
-            <td class="text-right font-bold p-2">${rowValue.toFixed(2)}</td>
+            <td class="text-right font-bold p-1">${rowTotal}</td>
+            <td class="text-right p-1">${item.unitPrice.toFixed(2)}</td>
+            <td class="text-right font-bold p-1">${rowValue.toFixed(2)}</td>
         </tr>
     `}).join('');
 
@@ -101,62 +99,62 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
                 .no-print { display: none; } 
                 body { -webkit-print-color-adjust: exact; } 
             }
-            body { font-family: sans-serif; padding: 20px; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #000; padding: 4px; }
+            body { font-family: sans-serif; padding: 10px; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; }
+            th, td { border: 1px solid #000; padding: 2px; }
             th { background-color: #f3f4f6; }
           </style>
         </head>
-        <body class="bg-white text-black p-8">
-            <div class="text-center mb-2 text-xs text-gray-400 uppercase tracking-widest">${BRANDING.companyName}</div>
-            <div class="flex justify-between border-b-2 border-black pb-4 mb-6">
+        <body class="bg-white text-black p-4">
+            <div class="text-center mb-2 text-[10px] text-gray-400 uppercase tracking-widest">${BRANDING.companyName}</div>
+            <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
                 <div>
-                    <h1 class="text-3xl font-extrabold uppercase tracking-wider">
+                    <h1 class="text-2xl font-extrabold uppercase tracking-wider">
                         Pedido #${order.displayId}
                         ${order.isPartial ? '<span class="text-lg bg-gray-200 px-2 rounded ml-2">(PARCIAL)</span>' : ''}
                     </h1>
-                    <p class="text-sm mt-1">Emissão: ${new Date(order.createdAt).toLocaleDateString()}</p>
+                    <p class="text-xs mt-1">Emissão: ${new Date(order.createdAt).toLocaleDateString()}</p>
                 </div>
                 <div class="text-right">
-                    <p class="font-bold text-lg">${order.repName}</p>
-                    <p class="text-sm text-gray-600">Representante</p>
+                    <p class="font-bold text-sm">${order.repName}</p>
+                    <p class="text-xs text-gray-600">Representante</p>
                 </div>
             </div>
 
-            <div class="mb-6 border border-black p-4 bg-gray-50">
-                <div class="grid grid-cols-2 gap-4">
+            <div class="mb-4 border border-black p-2 bg-gray-50">
+                <div class="grid grid-cols-2 gap-2">
                     <div>
-                        <p class="text-xs uppercase text-gray-500 font-bold">Cliente</p>
-                        <p class="font-bold text-lg">${order.clientName}</p>
+                        <p class="text-[10px] uppercase text-gray-500 font-bold">Cliente</p>
+                        <p class="font-bold text-sm">${order.clientName}</p>
                     </div>
                     <div>
-                        <p class="text-xs uppercase text-gray-500 font-bold">Localização</p>
-                        <p>${order.clientCity} - ${order.clientState}</p>
+                        <p class="text-[10px] uppercase text-gray-500 font-bold">Localização</p>
+                        <p class="text-xs">${order.clientCity} - ${order.clientState}</p>
                     </div>
                     <div>
-                        <p class="text-xs uppercase text-gray-500 font-bold">Entrega</p>
-                        <p>${deliveryDateDisplay}</p>
+                        <p class="text-[10px] uppercase text-gray-500 font-bold">Entrega</p>
+                        <p class="text-xs">${deliveryDateDisplay}</p>
                     </div>
                     <div>
-                        <p class="text-xs uppercase text-gray-500 font-bold">Pagamento</p>
-                        <p>${order.paymentMethod || '-'}</p>
+                        <p class="text-[10px] uppercase text-gray-500 font-bold">Pagamento</p>
+                        <p class="text-xs">${order.paymentMethod || '-'}</p>
                     </div>
                     ${order.romaneio ? `
-                    <div class="col-span-2 pt-2 border-t border-gray-300 mt-2">
-                        <p class="text-xs uppercase text-gray-500 font-bold">Romaneio</p>
-                        <p class="font-mono text-lg font-bold">${order.romaneio}</p>
+                    <div class="col-span-2 pt-1 border-t border-gray-300 mt-1">
+                        <p class="text-[10px] uppercase text-gray-500 font-bold">Romaneio</p>
+                        <p class="font-mono text-sm font-bold">${order.romaneio}</p>
                     </div>` : ''}
                 </div>
             </div>
 
-            <table class="w-full mb-6">
+            <table class="w-full mb-4">
                 <thead>
                     <tr class="bg-gray-200">
-                        <th class="text-left p-2">Ref / Cor</th>
-                        ${ALL_SIZES.map(s => `<th class="text-center w-8">${s}</th>`).join('')}
-                        <th class="text-right p-2 w-16">Qtd</th>
-                        <th class="text-right p-2 w-24">Unit.</th>
-                        <th class="text-right p-2 w-24">Total</th>
+                        <th class="text-left p-1">Ref / Cor</th>
+                        ${ALL_SIZES.map(s => `<th class="text-center w-6">${s}</th>`).join('')}
+                        <th class="text-right p-1 w-10">Qtd</th>
+                        <th class="text-right p-1 w-16">Unit.</th>
+                        <th class="text-right p-1 w-16">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -164,28 +162,28 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
                 </tbody>
                 <tfoot>
                     <tr class="bg-gray-100">
-                        <td colspan="${ALL_SIZES.length + 1}" class="text-right font-bold uppercase p-2">Total Itens</td>
-                        <td class="text-right font-bold p-2">${calculatedTotalPieces}</td>
-                        <td class="text-right font-bold p-2">-</td>
-                        <td class="text-right font-bold p-2">${calculatedSubtotal.toFixed(2)}</td>
+                        <td colspan="${ALL_SIZES.length + 1}" class="text-right font-bold uppercase p-1">Total Itens</td>
+                        <td class="text-right font-bold p-1">${calculatedTotalPieces}</td>
+                        <td class="text-right font-bold p-1">-</td>
+                        <td class="text-right font-bold p-1">${calculatedSubtotal.toFixed(2)}</td>
                     </tr>
                     ${order.discountValue > 0 ? `
                     <tr>
-                        <td colspan="${ALL_SIZES.length + 3}" class="text-right p-2">
+                        <td colspan="${ALL_SIZES.length + 3}" class="text-right p-1">
                             ${discountLabel}
                         </td>
-                        <td class="text-right text-red-600 font-bold p-2">
+                        <td class="text-right text-red-600 font-bold p-1">
                             - ${discountAmount.toFixed(2)}
                         </td>
                     </tr>` : ''}
-                    <tr class="text-lg border-t-2 border-black">
-                        <td colspan="${ALL_SIZES.length + 3}" class="text-right uppercase font-bold p-2">Total Final</td>
-                        <td class="text-right font-bold p-2">R$ ${finalTotal.toFixed(2)}</td>
+                    <tr class="text-sm border-t-2 border-black">
+                        <td colspan="${ALL_SIZES.length + 3}" class="text-right uppercase font-bold p-1">Total Final</td>
+                        <td class="text-right font-bold p-1">R$ ${finalTotal.toFixed(2)}</td>
                     </tr>
                 </tfoot>
             </table>
 
-            <div class="mt-12 pt-8 border-t border-black flex justify-between text-xs">
+            <div class="mt-8 pt-4 border-t border-black flex justify-between text-[10px]">
                 <div class="text-center">
                     _______________________________<br/>
                     ${order.repName}<br/>(Representante)

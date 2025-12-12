@@ -15,7 +15,8 @@
         .no-print { display: none !important; }
         .print-only { display: block !important; }
         body { background-color: white; }
-        @page { margin: 0.5cm; size: A4; }
+        /* Margem reduzida para 5mm (Modo Estreito) para caber mais itens */
+        @page { margin: 5mm; size: A4; }
       }
       .print-only { display: none; }
     </style>
