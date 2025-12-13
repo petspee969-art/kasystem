@@ -118,6 +118,7 @@ async function initDB() {
         console.log('🔄 Tentando conectar ao banco de dados...');
         console.log(`   Host: ${dbConfig.host}`);
         console.log(`   User: ${dbConfig.user}`);
+        console.log(`   Database: ${dbConfig.database}`);
         
         if (isCloudDatabase) {
              pool = mysql.createPool(dbConfig);
@@ -156,6 +157,11 @@ async function initDB() {
     } catch (err) {
         console.error('\n❌ ERRO CRÍTICO DE BANCO DE DADOS:');
         console.error(err.message);
+        if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+            console.error('👉 Verifique a SENHA do banco no arquivo .env');
+        } else if (err.code === 'ECONNREFUSED') {
+            console.error('👉 Verifique se o MySQL/MariaDB está rodando (XAMPP ou service mysql start)');
+        }
         dbError = err.message; // Guarda o erro para mostrar na tela
     }
 }
