@@ -2,21 +2,34 @@
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Configuração para __dirname em ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001;
+// Render ou Hostinger fornecem a porta via process.env.PORT
+const PORT = process.env.PORT || 3001;
 
-// Configuração básica da conexão
+// Configuração da conexão com Banco de Dados
+const isProduction = !!process.env.DB_HOST; // Se tem host configurado, é produção/nuvem
+
 const dbConfig = {
-    host: '127.0.0.1', 
-    port: 3306,        // Porta padrão do MySQL
-    user: 'root',      // Padrão do XAMPP
-    password: '',      // Padrão do XAMPP (vazio)
+    host: process.env.DB_HOST || '127.0.0.1', 
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER || 'root',      
+    password: process.env.DB_PASSWORD || '',      
+    database: process.env.DB_NAME || 'confeccao_db',
     dateStrings: true,
-    multipleStatements: true
+    multipleStatements: true,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    // CRÍTICO: Bancos na nuvem (TiDB, Aiven, Azure) exigem SSL
+    ssl: isProduction ? { rejectUnauthorized: false } : undefined
 };
-
-const DB_NAME = 'confeccao_db';
 
 app.use(cors());
 app.use(express.json());
@@ -29,11 +42,7 @@ app.use((req, res, next) => {
 
 let pool;
 
-// Scripts de Criação das Tabelas
-const INIT_SQL = `
-    CREATE DATABASE IF NOT EXISTS ${DB_NAME};
-    USE ${DB_NAME};
-
+const CREATE_TABLES_SQL = `
     CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100),
@@ -97,77 +106,84 @@ const INIT_SQL = `
         value JSON
     );
 
-    -- GARANTE QUE O ADMIN EXISTA COM A SENHA CORRETA
     INSERT INTO users (id, name, username, password, role) 
     VALUES ('1', 'Administrador', 'admin', 'admin', 'admin')
-    ON DUPLICATE KEY UPDATE password = 'admin', role = 'admin';
+    ON DUPLICATE KEY UPDATE password = password; 
 `;
 
 async function initDB() {
     try {
-        console.log('🔄 Tentando conectar ao MySQL em 127.0.0.1:3306...');
-        // 1. Conecta sem especificar o banco para poder criá-lo
-        const connection = await mysql.createConnection(dbConfig);
+        if (isProduction) {
+             console.log('☁️  Ambiente de Nuvem detectado.');
+             console.log(`📡 Conectando ao MySQL em ${dbConfig.host}...`);
+             
+             // Na nuvem, conectamos direto ao banco fornecido
+             pool = mysql.createPool(dbConfig);
+             
+             // Testar conexão
+             await pool.query('SELECT 1');
+             console.log('✅ Conexão estabelecida com sucesso.');
+             
+             // Criar Tabelas
+             await pool.query(CREATE_TABLES_SQL);
+             console.log('✅ Tabelas verificadas/criadas.');
+             return;
+        }
+
+        // --- AMBIENTE LOCAL (XAMPP) ---
+        console.log('🏠 Ambiente Local detectado (XAMPP).');
         
-        console.log('🔄 Conectado! Verificando banco de dados...');
-        await connection.query(INIT_SQL);
+        const { database, ...configWithoutDb } = dbConfig;
         
-        // --- MIGRAÇÃO SEGURA PARA COLUNA min_stock ---
+        // 1. Conecta sem DB para criar se não existir
+        const connection = await mysql.createConnection(configWithoutDb);
+        await connection.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
+        await connection.query(`USE ${database}`);
+        
+        // 2. Cria tabelas
+        await connection.query(CREATE_TABLES_SQL);
+        
+        // 3. Verifica migração min_stock (apenas local precisa dessa checagem manual geralmente)
         try {
-            await connection.query(`
-                SELECT min_stock FROM products LIMIT 1;
-            `);
+            await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
             console.log("⚠️ Coluna 'min_stock' não encontrada. Criando...");
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
-            console.log("✅ Coluna 'min_stock' criada com sucesso.");
         }
-        // ----------------------------------------------
 
-        console.log('✅ Banco de dados configurado com sucesso.');
-        console.log('✅ Usuário ADMIN garantido (Login: admin / Senha: admin)');
-        
+        console.log('✅ Banco de dados Local configurado.');
         await connection.end();
 
-        // 2. Inicializa o Pool conectado ao banco correto
-        pool = mysql.createPool({
-            ...dbConfig,
-            database: DB_NAME
-        });
+        // 4. Cria o pool oficial
+        pool = mysql.createPool(dbConfig);
 
     } catch (err) {
-        console.error('\n❌ ERRO CRÍTICO NO BANCO DE DADOS:');
-        console.error(`Mensagem: ${err.message}`);
-        
-        if (err.code === 'ECONNREFUSED') {
-            console.error('👉 O XAMPP (MySQL) parece estar DESLIGADO ou em outra porta.');
-            console.error('👉 Abra o painel do XAMPP e clique em START no MySQL.');
-        } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-            console.error('👉 Senha do banco incorreta! Se você colocou senha no root do XAMPP, atualize a variável dbConfig no arquivo server.js.');
-        }
-        console.error('\n');
+        console.error('\n❌ ERRO DE CONEXÃO COM BANCO DE DADOS:');
+        console.error(err.message);
     }
 }
 
 initDB();
 
-// Middleware para verificar se o banco está pronto
+// Middleware de Banco
 app.use((req, res, next) => {
     if (!pool) {
-        console.error('⚠️ Requisição recebida, mas banco de dados não está conectado.');
-        return res.status(500).json({ error: 'O servidor não conseguiu conectar ao MySQL. Verifique se o XAMPP está rodando.' });
+        return res.status(500).json({ error: 'Banco de dados desconectado ou iniciando...' });
     }
     next();
 });
 
-// --- ROTAS USERS ---
+// --- SERVIR ARQUIVOS ESTÁTICOS (FRONTEND) ---
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// --- ROTAS DA API ---
+
+// Users
 app.get('/api/users', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM users');
         res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/users', async (req, res) => {
@@ -175,21 +191,17 @@ app.post('/api/users', async (req, res) => {
         const { id, name, username, password, role } = req.body;
         await pool.query('INSERT INTO users SET ?', { id, name, username, password, role });
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/users/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTAS PRODUCTS ---
+// Products
 app.get('/api/products', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM products');
@@ -201,9 +213,7 @@ app.get('/api/products', async (req, res) => {
             base_price: parseFloat(p.base_price)
         }));
         res.json(products);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/products', async (req, res) => {
@@ -216,9 +226,7 @@ app.post('/api/products', async (req, res) => {
         };
         await pool.query('INSERT INTO products SET ?', dbData);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/products/:id', async (req, res) => {
@@ -229,21 +237,17 @@ app.put('/api/products/:id', async (req, res) => {
             [JSON.stringify(stock), JSON.stringify(min_stock || {}), enforce_stock, base_price, req.params.id]
         );
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/products/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTAS CLIENTS ---
+// Clients
 app.get('/api/clients', async (req, res) => {
     try {
         let query = 'SELECT * FROM clients';
@@ -254,46 +258,36 @@ app.get('/api/clients', async (req, res) => {
         }
         const [rows] = await pool.query(query, params);
         res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/clients', async (req, res) => {
     try {
         await pool.query('INSERT INTO clients SET ?', req.body);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/clients/:id', async (req, res) => {
     try {
         await pool.query('UPDATE clients SET ? WHERE id = ?', [req.body, req.params.id]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/clients/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM clients WHERE id = ?', [req.params.id]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTAS REP PRICES ---
+// Rep Prices
 app.get('/api/rep_prices', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT * FROM rep_prices WHERE rep_id = ?', [req.query.rep_id]);
         res.json(rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/rep_prices', async (req, res) => {
@@ -307,12 +301,10 @@ app.post('/api/rep_prices', async (req, res) => {
             await pool.query('INSERT INTO rep_prices SET ?', { rep_id, reference, price });
         }
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTAS ORDERS ---
+// Orders
 app.get('/api/orders', async (req, res) => {
     try {
         let query = 'SELECT * FROM orders';
@@ -333,9 +325,7 @@ app.get('/api/orders', async (req, res) => {
             final_total_value: parseFloat(o.final_total_value)
         }));
         res.json(orders);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/orders/:id', async (req, res) => {
@@ -349,9 +339,7 @@ app.get('/api/orders/:id', async (req, res) => {
         } else {
             res.status(404).json({ error: 'Not found' });
         }
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/orders', async (req, res) => {
@@ -360,9 +348,7 @@ app.post('/api/orders', async (req, res) => {
         const dbOrder = { ...data, items: JSON.stringify(data.items) };
         await pool.query('INSERT INTO orders SET ?', dbOrder);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/orders/:id', async (req, res) => {
@@ -376,36 +362,28 @@ app.put('/api/orders/:id', async (req, res) => {
         const order = rows[0];
         order.items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
         res.json(order);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/orders/:id', async (req, res) => {
     try {
         await pool.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTA CONFIG (SEQUENCIAL) ---
+// Config
 app.get('/api/config/:key', async (req, res) => {
     try {
         const [rows] = await pool.query('SELECT value FROM app_config WHERE `key` = ?', [req.params.key]);
         res.json(rows[0] || null);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/config', async (req, res) => {
     try {
         const { key, value } = req.body;
         const [exists] = await pool.query('SELECT `key` FROM app_config WHERE `key` = ?', [key]);
-        // MySQL converte JSON para string automaticamente se a coluna for JSON,
-        // mas em algumas versões/drivers é bom garantir.
         const valToSave = JSON.stringify(value); 
         
         if (exists.length > 0) {
@@ -414,12 +392,14 @@ app.post('/api/config', async (req, res) => {
             await pool.query('INSERT INTO app_config SET ?', { key, value: valToSave });
         }
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- ROTA CATCH-ALL (PARA REACT ROUTER) ---
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor Backend rodando em http://127.0.0.1:${PORT}`);
-    console.log(`   (Certifique-se que o XAMPP MySQL está rodando na porta 3306)`);
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
