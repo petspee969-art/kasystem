@@ -15,12 +15,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Configuração da conexão com Banco de Dados
-// O MariaDB é compatível com o protocolo MySQL, então usamos a biblioteca 'mysql2'.
-const isProduction = !!process.env.DB_HOST; 
+// Se DB_HOST for definido mas for localhost, tratamos como ambiente "controlável" para criar o banco
+const isCloudDatabase = !!process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost';
 
 const dbConfig = {
     host: process.env.DB_HOST || '127.0.0.1', 
-    // A porta padrão do MariaDB também é 3306 (igual ao MySQL)
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
     user: process.env.DB_USER || 'root',      
     password: process.env.DB_PASSWORD || '',      
@@ -30,8 +29,8 @@ const dbConfig = {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    // Configuração SSL para bancos na nuvem (TiDB, Aiven, Azure MariaDB, etc)
-    ssl: isProduction ? { rejectUnauthorized: false } : undefined
+    // Configuração SSL apenas se for banco na nuvem (AWS RDS, Azure, etc)
+    ssl: isCloudDatabase ? { rejectUnauthorized: false } : undefined
 };
 
 app.use(cors());
@@ -39,7 +38,6 @@ app.use(express.json());
 
 // Middleware de Log
 app.use((req, res, next) => {
-    // Ignora logs de arquivos estáticos para limpar o terminal
     if (!req.url.includes('.')) {
         console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     }
@@ -48,8 +46,6 @@ app.use((req, res, next) => {
 
 let pool;
 
-// SQL compatível com MariaDB 10.2+ e MySQL 5.7+
-// O tipo JSON no MariaDB é um alias para LONGTEXT com validação JSON automática.
 const CREATE_TABLES_SQL = `
     CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
@@ -121,26 +117,21 @@ const CREATE_TABLES_SQL = `
 
 async function initDB() {
     try {
-        if (isProduction) {
-             console.log('☁️  Ambiente de Nuvem / VPS detectado.');
-             console.log(`📡 Conectando ao MariaDB/MySQL em ${dbConfig.host}...`);
-             
+        if (isCloudDatabase) {
+             console.log('☁️  Banco de Dados Externo detectado.');
              pool = mysql.createPool(dbConfig);
-             
              await pool.query('SELECT 1');
-             console.log('✅ Conexão estabelecida com sucesso.');
-             
+             console.log('✅ Conexão estabelecida.');
              await pool.query(CREATE_TABLES_SQL);
-             console.log('✅ Tabelas verificadas/criadas.');
              return;
         }
 
-        // --- AMBIENTE LOCAL ---
-        console.log('🏠 Ambiente Local detectado.');
+        // --- AMBIENTE LOCAL OU VPS (Localhost) ---
+        console.log('🏠 Configurando Banco de Dados Local/VPS...');
         
         const { database, ...configWithoutDb } = dbConfig;
         
-        // 1. Conecta sem DB para criar se não existir
+        // 1. Conecta sem especificar o banco para poder criá-lo
         const connection = await mysql.createConnection(configWithoutDb);
         await connection.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
         await connection.query(`USE ${database}`);
@@ -148,7 +139,7 @@ async function initDB() {
         // 2. Cria tabelas
         await connection.query(CREATE_TABLES_SQL);
         
-        // 3. Verifica migração min_stock
+        // 3. Migrações (se necessário)
         try {
             await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
@@ -156,7 +147,7 @@ async function initDB() {
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
         }
 
-        console.log('✅ Banco de dados MariaDB/MySQL Local configurado.');
+        console.log('✅ Banco de dados configurado com sucesso.');
         await connection.end();
 
         // 4. Cria o pool oficial
@@ -165,7 +156,7 @@ async function initDB() {
     } catch (err) {
         console.error('\n❌ ERRO DE CONEXÃO COM BANCO DE DADOS:');
         console.error(err.message);
-        console.error('Dica: Verifique se o MariaDB está rodando na porta 3306 e se a senha do root está correta.');
+        console.error('Dica: Verifique se o MariaDB está rodando e se a senha no arquivo .env está correta.');
     }
 }
 
