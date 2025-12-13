@@ -60,7 +60,7 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
         const rowValue = rowTotal * item.unitPrice;
         calculatedSubtotal += rowValue;
 
-        const obsHtml = item.observation ? `<br/><span style="font-size: 9px; font-weight: bold; background-color: #f3f4f6; padding: 1px;">Obs: ${item.observation}</span>` : '';
+        const obsHtml = item.observation ? `<div style="font-size: 9px; font-style: italic; background-color: #f3f4f6; padding: 1px;">Obs: ${item.observation}</div>` : '';
 
         return `
         <tr>
@@ -97,19 +97,21 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
           <style>
             @media print { 
                 .no-print { display: none; } 
-                body { -webkit-print-color-adjust: exact; } 
+                body { -webkit-print-color-adjust: exact; margin: 0; padding: 0; } 
+                @page { margin: 5mm; size: A4; }
             }
             body { font-family: sans-serif; padding: 10px; }
             table { width: 100%; border-collapse: collapse; font-size: 10px; }
             th, td { border: 1px solid #000; padding: 2px; }
             th { background-color: #f3f4f6; }
+            .p-1 { padding: 2px !important; } /* Force compact padding */
           </style>
         </head>
         <body class="bg-white text-black p-4">
             <div class="text-center mb-2 text-[10px] text-gray-400 uppercase tracking-widest">${BRANDING.companyName}</div>
             <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
                 <div>
-                    <h1 class="text-2xl font-extrabold uppercase tracking-wider">
+                    <h1 class="text-xl font-extrabold uppercase tracking-wider">
                         Pedido #${order.displayId}
                         ${order.isPartial ? '<span class="text-lg bg-gray-200 px-2 rounded ml-2">(PARCIAL)</span>' : ''}
                     </h1>
@@ -122,27 +124,27 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
             </div>
 
             <div class="mb-4 border border-black p-2 bg-gray-50">
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-2 gap-2 text-[10px]">
                     <div>
-                        <p class="text-[10px] uppercase text-gray-500 font-bold">Cliente</p>
-                        <p class="font-bold text-sm">${order.clientName}</p>
+                        <span class="uppercase text-gray-500 font-bold">Cliente:</span>
+                        <span class="font-bold text-sm ml-1">${order.clientName}</span>
                     </div>
                     <div>
-                        <p class="text-[10px] uppercase text-gray-500 font-bold">Localização</p>
-                        <p class="text-xs">${order.clientCity} - ${order.clientState}</p>
+                        <span class="uppercase text-gray-500 font-bold">Local:</span>
+                        <span class="ml-1">${order.clientCity} - ${order.clientState}</span>
                     </div>
                     <div>
-                        <p class="text-[10px] uppercase text-gray-500 font-bold">Entrega</p>
-                        <p class="text-xs">${deliveryDateDisplay}</p>
+                        <span class="uppercase text-gray-500 font-bold">Entrega:</span>
+                        <span class="ml-1">${deliveryDateDisplay}</span>
                     </div>
                     <div>
-                        <p class="text-[10px] uppercase text-gray-500 font-bold">Pagamento</p>
-                        <p class="text-xs">${order.paymentMethod || '-'}</p>
+                        <span class="uppercase text-gray-500 font-bold">Pgto:</span>
+                        <span class="ml-1">${order.paymentMethod || '-'}</span>
                     </div>
                     ${order.romaneio ? `
                     <div class="col-span-2 pt-1 border-t border-gray-300 mt-1">
-                        <p class="text-[10px] uppercase text-gray-500 font-bold">Romaneio</p>
-                        <p class="font-mono text-sm font-bold">${order.romaneio}</p>
+                        <span class="uppercase text-gray-500 font-bold">Romaneio:</span>
+                        <span class="font-mono text-sm font-bold ml-1">${order.romaneio}</span>
                     </div>` : ''}
                 </div>
             </div>
@@ -150,7 +152,7 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
             <table class="w-full mb-4">
                 <thead>
                     <tr class="bg-gray-200">
-                        <th class="text-left p-1">Ref / Cor</th>
+                        <th class="text-left p-1">Ref - Cor</th>
                         ${ALL_SIZES.map(s => `<th class="text-center w-6">${s}</th>`).join('')}
                         <th class="text-right p-1 w-10">Qtd</th>
                         <th class="text-right p-1 w-16">Unit.</th>

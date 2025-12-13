@@ -614,8 +614,8 @@ const AdminOrderList: React.FC = () => {
         if(win) {
             win.document.write('<html><head><title>Imprimir Pedido</title>');
             win.document.write('<script src="https://cdn.tailwindcss.com"></script>');
-            win.document.write('<style>@media print { .no-print { display: none; } body { -webkit-print-color-adjust: exact; } table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid black; } }</style>');
-            win.document.write('</head><body class="p-4 bg-white">');
+            win.document.write('<style>@media print { .no-print { display: none; } body { -webkit-print-color-adjust: exact; margin: 5mm; } table { border-collapse: collapse; width: 100%; font-size: 10px; } th, td { border: 1px solid black; padding: 2px; } }</style>');
+            win.document.write('</head><body class="bg-white">');
             let content = printContent.innerHTML;
             if (order.isPartial) content = content.replace('Pedido #', 'Pedido (ENTREGA PARCIAL) #');
             win.document.write(content);
@@ -678,7 +678,7 @@ const AdminOrderList: React.FC = () => {
     });
 
     const html = `
-      <html><head><title>Lista de Produção - ${BRANDING.companyName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; } th, td { border: 1px solid black; padding: 4px; text-align: center; } th { background-color: #f3f4f6; font-weight: bold; } td.left { text-align: left; } .header { margin-bottom: 20px; border-bottom: 2px solid black; padding-bottom: 10px; } @media print { button { display: none; } }</style></head><body>
+      <html><head><title>Lista de Produção - ${BRANDING.companyName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10px; } th, td { border: 1px solid black; padding: 2px; text-align: center; } th { background-color: #f3f4f6; font-weight: bold; } td.left { text-align: left; } .header { margin-bottom: 20px; border-bottom: 2px solid black; padding-bottom: 10px; } @media print { button { display: none; } }</style></head><body>
           <div class="header"><h1 class="text-2xl font-bold uppercase">Resumo de Produção</h1><p class="text-sm text-gray-600">${dateRange}</p><p class="text-sm">Pedidos Selecionados: <strong>${selectedOrderIds.size}</strong></p><p class="text-xs uppercase mt-1 text-gray-400">${BRANDING.companyName}</p></div>
           <table><thead><tr><th width="20%" class="left">Referência</th><th width="20%" class="left">Cor</th>${ALL_SIZES.map(s => `<th>${s}</th>`).join('')}<th width="10%">Total</th></tr></thead><tbody>${aggregatedItems.map(item => `<tr><td class="left font-bold">${item.reference}</td><td class="left uppercase">${item.color}</td>${ALL_SIZES.map(s => `<td>${item.sizes[s] ? `<strong>${item.sizes[s]}</strong>` : '-'}</td>`).join('')}<td class="font-bold bg-gray-50 text-base">${item.totalQty}</td></tr>`).join('')}</tbody><tfoot><tr class="bg-gray-100"><td colspan="2" class="left font-bold uppercase p-2">Totais por Tamanho</td>${ALL_SIZES.map(s => `<td>${(sizeTotals[s] as number) > 0 ? sizeTotals[s] : ''}</td>`).join('')}<td class="font-bold text-xl">${totalPieces}</td></tr></tfoot></table><script>window.onload = function() { window.print(); }</script></body></html>`;
     win.document.write(html);
@@ -740,7 +740,104 @@ const AdminOrderList: React.FC = () => {
                     <button onClick={() => handleEditRomaneio(order)} className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition p-2 rounded"><Truck className="w-5 h-5" /></button>
                     {order.romaneio ? <div className="text-gray-300 p-2"><Lock className="w-5 h-5" /></div> : <button onClick={() => openPickingModal(order)} className="text-orange-500 hover:text-orange-700 hover:bg-orange-50 p-2 rounded transition"><PackageOpen className="w-5 h-5" /></button>}
                     <button onClick={() => handlePrintIndividual(order)} className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition p-2 rounded"><Printer className="w-5 h-5" /></button>
-                    <div id={`print-order-${order.id}`} className="hidden"><div className="border-2 border-black p-4 font-sans max-w-3xl mx-auto"><div className="flex justify-between border-b-2 border-black pb-2 mb-4"><div><h1 className="text-2xl font-extrabold uppercase tracking-wider">Pedido #{order.displayId} {order.isPartial && <span className="text-sm ml-2 bg-gray-200 px-2 rounded">(PARCIAL)</span>}</h1><p className="text-xs mt-1">Emissão: {new Date().toLocaleDateString()}</p></div><div className="text-right"><p className="font-bold">{order.repName}</p><p className="text-xs text-gray-600">Representante</p></div></div><div className="mb-4 border border-black p-2 bg-gray-50"><div className="grid grid-cols-2 gap-2 text-xs"><div><p className="uppercase text-gray-500 font-bold">Cliente</p><p className="font-bold text-sm">{order.clientName}</p></div><div><p className="uppercase text-gray-500 font-bold">Localização</p><p>{order.clientCity} - {order.clientState}</p></div><div><p className="uppercase text-gray-500 font-bold">Entrega</p><p>{(order.deliveryDate && !isNaN(new Date(order.deliveryDate).getTime())) ? new Date(order.deliveryDate).toLocaleDateString('pt-BR') : 'A Combinar'}</p></div><div><p className="uppercase text-gray-500 font-bold">Pagamento</p><p>{order.paymentMethod || '-'}</p></div>{order.romaneio && (<div className="col-span-2 mt-1 pt-1 border-t border-gray-300"><p className="uppercase text-gray-500 font-bold">Romaneio</p><p className="font-mono text-sm">{order.romaneio} {order.isPartial && '(ENTREGA PARCIAL)'}</p></div>)}</div></div><table className="w-full border-collapse border border-black text-xs"><thead><tr className="bg-gray-200"><th className="border border-black p-1 text-left">Ref / Cor</th>{ALL_SIZES.map(s => (<th key={s} className="border border-black p-1 text-center w-6">{s}</th>))}<th className="border border-black p-1 w-10 text-right">Qtd</th><th className="border border-black p-1 w-16 text-right">Total</th></tr></thead><tbody>{order.items.map((item, idx) => { let displayRowTotal = 0; const cells = ALL_SIZES.map(s => { let rawVal = item.sizes?.[s]; let numVal = typeof rawVal === 'number' ? rawVal : 0; displayRowTotal = displayRowTotal + numVal; return numVal; }); if (displayRowTotal === 0) return null; calculatedTotalPieces = calculatedTotalPieces + displayRowTotal; const rowValue = displayRowTotal * (Number(item.unitPrice) || 0); calculatedSubtotal = calculatedSubtotal + rowValue; return (<tr key={idx}><td className="border border-black p-1"><span className="font-bold">{item.reference}</span> - <span className="font-normal uppercase">{item.color}</span> {item.observation && <span className="block text-[9px] bg-gray-100 p-0.5 mt-0.5">Obs: {item.observation}</span>}</td>{cells.map((val, i) => (<td key={i} className="border border-black p-1 text-center">{val > 0 ? <span className="font-bold">{val}</span> : <span className="text-gray-300">-</span>}</td>))}<td className="border border-black p-1 text-right font-bold">{displayRowTotal}</td><td className="border border-black p-1 text-right">{rowValue.toFixed(2)}</td></tr>); })}</tbody><tfoot><tr className="bg-gray-100"><td className="border border-black p-1 text-right font-bold uppercase">Totais</td><td colSpan={ALL_SIZES.length} className="border border-black p-1"></td><td className="border border-black p-1 text-right font-bold">{calculatedTotalPieces}</td><td className="border border-black p-1 text-right font-bold">-</td></tr>{order.discountValue > 0 && (<tr><td colSpan={ALL_SIZES.length + 2} className="border border-black p-1 text-right">{order.discountType === 'percentage' ? `Desconto (${order.discountValue}%)` : 'Desconto (Fixo)'}</td><td className="border border-black p-1 text-right text-red-600 font-bold">- {order.discountType === 'percentage' ? ((calculatedSubtotal * order.discountValue)/100).toFixed(2) : order.discountValue.toFixed(2)}</td></tr>)}<tr className="text-sm"><td colSpan={ALL_SIZES.length + 2} className="border border-black p-1 text-right uppercase font-bold">Total Final</td><td className="border border-black p-1 text-right font-bold">R$ {(order.discountType === 'percentage' ? calculatedSubtotal * (1 - order.discountValue/100) : calculatedSubtotal - order.discountValue).toFixed(2)}</td></tr></tfoot></table><div className="mt-4 pt-4 border-t border-black flex justify-between text-[10px]"><div>_______________________________<br/>Assinatura Representante</div><div className="text-center font-bold pt-2">{BRANDING.companyName}</div><div>_______________________________<br/>Assinatura Cliente</div></div></div></div></td>
+                    
+                    {/* HIDDEN PRINT TEMPLATE - ATUALIZADO PARA MODO COMPACTO E REF-COR NA MESMA LINHA */}
+                    <div id={`print-order-${order.id}`} className="hidden">
+                        <div className="border-2 border-black p-4 font-sans max-w-3xl mx-auto text-[10px]">
+                            <div className="flex justify-between border-b-2 border-black pb-2 mb-2">
+                                <div>
+                                    <h1 className="text-xl font-extrabold uppercase tracking-wider">
+                                        Pedido #{order.displayId} {order.isPartial && <span className="text-sm ml-2 bg-gray-200 px-2 rounded">(PARCIAL)</span>}
+                                    </h1>
+                                    <p className="mt-1">Emissão: {new Date().toLocaleDateString()}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-bold">{order.repName}</p>
+                                    <p className="text-gray-600">Representante</p>
+                                </div>
+                            </div>
+                            
+                            <div className="mb-2 border border-black p-1 bg-gray-50">
+                                <div className="grid grid-cols-2 gap-1">
+                                    <div><span className="uppercase text-gray-500 font-bold">Cliente:</span> <span className="font-bold">{order.clientName}</span></div>
+                                    <div><span className="uppercase text-gray-500 font-bold">Local:</span> {order.clientCity} - {order.clientState}</div>
+                                    <div><span className="uppercase text-gray-500 font-bold">Entrega:</span> {(order.deliveryDate && !isNaN(new Date(order.deliveryDate).getTime())) ? new Date(order.deliveryDate).toLocaleDateString('pt-BR') : 'A Combinar'}</div>
+                                    <div><span className="uppercase text-gray-500 font-bold">Pgto:</span> {order.paymentMethod || '-'}</div>
+                                    {order.romaneio && (<div className="col-span-2 border-t border-gray-300 mt-1 pt-1"><span className="uppercase text-gray-500 font-bold">Romaneio:</span> <span className="font-mono font-bold">{order.romaneio}</span></div>)}
+                                </div>
+                            </div>
+
+                            <table className="w-full border-collapse border border-black text-[10px]">
+                                <thead>
+                                    <tr className="bg-gray-200">
+                                        <th className="border border-black p-[2px] text-left">Ref - Cor</th>
+                                        {ALL_SIZES.map(s => (<th key={s} className="border border-black p-[2px] text-center w-6">{s}</th>))}
+                                        <th className="border border-black p-[2px] w-10 text-right">Qtd</th>
+                                        <th className="border border-black p-[2px] w-16 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {order.items.map((item, idx) => {
+                                        let displayRowTotal = 0;
+                                        const cells = ALL_SIZES.map(s => {
+                                            let rawVal = item.sizes?.[s];
+                                            let numVal = typeof rawVal === 'number' ? rawVal : 0;
+                                            displayRowTotal = displayRowTotal + numVal;
+                                            return numVal;
+                                        });
+
+                                        if (displayRowTotal === 0) return null;
+                                        
+                                        calculatedTotalPieces = calculatedTotalPieces + displayRowTotal;
+                                        const rowValue = displayRowTotal * (Number(item.unitPrice) || 0);
+                                        calculatedSubtotal = calculatedSubtotal + rowValue;
+
+                                        return (
+                                            <tr key={idx}>
+                                                <td className="border border-black p-[2px]">
+                                                    <span className="font-bold">{item.reference}</span> - <span className="font-normal uppercase">{item.color}</span>
+                                                    {item.observation && <div className="text-[9px] bg-gray-100 italic">Obs: {item.observation}</div>}
+                                                </td>
+                                                {cells.map((val, i) => (<td key={i} className="border border-black p-[2px] text-center">{val > 0 ? <span className="font-bold">{val}</span> : <span className="text-gray-300">-</span>}</td>))}
+                                                <td className="border border-black p-[2px] text-right font-bold">{displayRowTotal}</td>
+                                                <td className="border border-black p-[2px] text-right">{rowValue.toFixed(2)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="bg-gray-100">
+                                        <td className="border border-black p-[2px] text-right font-bold uppercase">Totais</td>
+                                        <td colSpan={ALL_SIZES.length} className="border border-black p-[2px]"></td>
+                                        <td className="border border-black p-[2px] text-right font-bold">{calculatedTotalPieces}</td>
+                                        <td className="border border-black p-[2px] text-right font-bold">-</td>
+                                    </tr>
+                                    {order.discountValue > 0 && (
+                                        <tr>
+                                            <td colSpan={ALL_SIZES.length + 2} className="border border-black p-[2px] text-right">Desconto</td>
+                                            <td className="border border-black p-[2px] text-right text-red-600 font-bold">
+                                                - {order.discountType === 'percentage' ? ((calculatedSubtotal * order.discountValue)/100).toFixed(2) : order.discountValue.toFixed(2)}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    <tr className="">
+                                        <td colSpan={ALL_SIZES.length + 2} className="border border-black p-[2px] text-right uppercase font-bold">Total Final</td>
+                                        <td className="border border-black p-[2px] text-right font-bold">
+                                            R$ {(order.discountType === 'percentage' ? calculatedSubtotal * (1 - order.discountValue/100) : calculatedSubtotal - order.discountValue).toFixed(2)}
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+
+                            <div className="mt-2 pt-2 border-t border-black flex justify-between text-[9px]">
+                                <div>_______________________<br/>Assinatura Representante</div>
+                                <div className="text-center font-bold pt-2">{BRANDING.companyName}</div>
+                                <div>_______________________<br/>Assinatura Cliente</div>
+                            </div>
+                        </div>
+                    </div>
+
+                  </td>
                 </tr>
               )})}
             </tbody>

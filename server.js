@@ -14,6 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Configuração da conexão com Banco de Dados
+// Na VPS, geralmente é local (127.0.0.1). Se usar banco externo, preencha o DB_HOST no .env
 const isCloudDatabase = !!process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost';
 
 const dbConfig = {
@@ -27,22 +28,24 @@ const dbConfig = {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
+    // Apenas rejeita não autorizado se for nuvem externa
     ssl: isCloudDatabase ? { rejectUnauthorized: false } : undefined
 };
 
 app.use(cors());
 app.use(express.json());
 
-// Middleware de Log Simples
+// Middleware de Log para monitorar requisições na VPS via 'pm2 logs'
 app.use((req, res, next) => {
-    if (!req.url.includes('.')) {
+    // Loga apenas requisições de API para não poluir com arquivos estáticos
+    if (req.url.startsWith('/api')) {
         console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     }
     next();
 });
 
 let pool;
-let dbError = null; // Armazena o erro de conexão para mostrar no navegador
+let dbError = null;
 
 const CREATE_TABLES_SQL = `
     CREATE TABLE IF NOT EXISTS users (
@@ -120,26 +123,27 @@ async function initDB() {
         console.log(`   User: ${dbConfig.user}`);
         console.log(`   Database: ${dbConfig.database}`);
         
+        // Conexão inicial
         if (isCloudDatabase) {
              pool = mysql.createPool(dbConfig);
              await pool.query('SELECT 1');
              console.log('✅ Conexão Nuvem estabelecida.');
-             await pool.query(CREATE_TABLES_SQL);
-             return;
+        } else {
+            // Setup Local (Cria database se não existir)
+            const { database, ...configWithoutDb } = dbConfig;
+            const connection = await mysql.createConnection(configWithoutDb);
+            await connection.query(`CREATE DATABASE IF NOT EXISTS \`${database}\``);
+            await connection.end();
+            
+            // Conecta com o banco selecionado
+            pool = mysql.createPool(dbConfig);
         }
 
-        // AMBIENTE LOCAL/VPS
-        const { database, ...configWithoutDb } = dbConfig;
-        
-        // 1. Tenta conectar sem banco específico (para criar se não existir)
-        const connection = await mysql.createConnection(configWithoutDb);
-        await connection.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
-        await connection.query(`USE ${database}`);
-        
-        // 2. Cria tabelas
+        // Cria tabelas
+        const connection = await pool.getConnection();
         await connection.query(CREATE_TABLES_SQL);
         
-        // 3. Migrações
+        // Migrações de segurança (adicionar colunas se faltarem)
         try {
             await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
@@ -147,30 +151,23 @@ async function initDB() {
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
         }
 
-        console.log('✅ Banco de dados LOCAL configurado e tabelas criadas!');
-        await connection.end();
-
-        // 4. Cria o pool oficial
-        pool = mysql.createPool(dbConfig);
+        connection.release();
+        console.log('✅ Banco de dados configurado e tabelas verificadas!');
         dbError = null;
 
     } catch (err) {
         console.error('\n❌ ERRO CRÍTICO DE BANCO DE DADOS:');
         console.error(err.message);
-        if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-            console.error('👉 Verifique a SENHA do banco no arquivo .env');
-        } else if (err.code === 'ECONNREFUSED') {
-            console.error('👉 Verifique se o MySQL/MariaDB está rodando (XAMPP ou service mysql start)');
-        }
-        dbError = err.message; // Guarda o erro para mostrar na tela
+        dbError = err.message;
     }
 }
 
 initDB();
 
-// Middleware de Banco
+// Middleware de verificação de Banco
 app.use((req, res, next) => {
-    if (!pool) {
+    // Se for rota de API e não tiver banco, retorna erro
+    if (req.url.startsWith('/api') && !pool) {
         return res.status(500).json({ 
             error: 'Erro de conexão com Banco de Dados', 
             details: dbError || 'Iniciando conexão...' 
@@ -179,10 +176,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- SERVIR ARQUIVOS ESTÁTICOS (FRONTEND) ---
-app.use(express.static(path.join(__dirname, 'dist')));
-
-// --- ROTAS DA API ---
+// --- API ROUTES ---
 
 // Users
 app.get('/api/users', async (req, res) => {
@@ -320,7 +314,6 @@ app.get('/api/orders', async (req, res) => {
                 query += ` AND id != '${req.query.excludeId}'`;
             }
         }
-        
         const [rows] = await pool.query(query);
         const orders = rows.map(o => ({
             ...o,
@@ -401,28 +394,40 @@ app.post('/api/config', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ROTA CATCH-ALL (PARA REACT ROUTER) ---
+
+// --- SERVIR FRONTEND E CATCH-ALL ---
+
+// Serve arquivos estáticos da pasta 'dist' (o build do React)
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Qualquer requisição que NÃO for /api e não for arquivo estático,
+// retorna o index.html do React (para o SPA funcionar)
 app.get('*', (req, res) => {
-    // Verifica se o build existe antes de tentar enviar
     const indexPath = path.join(__dirname, 'dist', 'index.html');
+    
+    // Verifica se o build existe
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
+        // Mensagem amigável se o usuário esqueceu de rodar 'npm run build'
         res.status(404).send(`
-            <div style="font-family: sans-serif; padding: 20px; text-align: center;">
-                <h1>⚠️ Frontend não encontrado</h1>
-                <p>Você rodou <code>npm start</code>, mas a pasta <code>dist</code> não existe.</p>
-                <hr/>
-                <h3>Como resolver:</h3>
-                <p>1. Para <strong>DESENVOLVIMENTO</strong> (recomendado agora):</p>
-                <pre style="background: #eee; padding: 10px; display: inline-block; border-radius: 5px;">npm run dev</pre>
-                <p>2. Para <strong>PRODUÇÃO</strong>:</p>
-                <pre style="background: #eee; padding: 10px; display: inline-block; border-radius: 5px;">npm run build\nnpm start</pre>
+            <div style="font-family: sans-serif; padding: 40px; text-align: center; background: #f0f0f0;">
+                <h1 style="color: #e11d48;">⚠️ Frontend não encontrado</h1>
+                <p>O servidor Node está rodando, mas não encontrou a pasta <code>dist</code> com o site.</p>
+                <div style="background: white; padding: 20px; border-radius: 8px; max-width: 600px; margin: 20px auto; text-align: left; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+                    <strong>Passos para corrigir na VPS:</strong>
+                    <ol>
+                        <li>Pare o servidor atual (Ctrl+C ou <code>pm2 stop gestao</code>)</li>
+                        <li>Rode o comando de build: <pre style="background: #333; color: #fff; padding: 10px; border-radius: 4px;">npm run build</pre></li>
+                        <li>Inicie novamente: <pre style="background: #333; color: #fff; padding: 10px; border-radius: 4px;">pm2 restart gestao</pre></li>
+                    </ol>
+                </div>
             </div>
         `);
     }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📂 Servindo frontend de: ${path.join(__dirname, 'dist')}`);
 });
