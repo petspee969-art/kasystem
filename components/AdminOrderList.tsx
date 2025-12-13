@@ -645,8 +645,12 @@ const AdminOrderList: React.FC = () => {
           
           if (item.sizes) {
               Object.keys(item.sizes).forEach((size) => {
-                const qty = Number(item.sizes[size]) || 0;
-                const current = Number(aggregation[key].sizes[size]) || 0;
+                const qtyVal = item.sizes[size];
+                const qty = typeof qtyVal === 'number' ? qtyVal : 0;
+                
+                const currentVal = aggregation[key].sizes[size];
+                const current = typeof currentVal === 'number' ? currentVal : 0;
+                
                 aggregation[key].sizes[size] = current + qty;
               });
           }
@@ -666,7 +670,8 @@ const AdminOrderList: React.FC = () => {
     ALL_SIZES.forEach(s => sizeTotals[s] = 0);
     aggregatedItems.forEach(item => {
         ALL_SIZES.forEach(s => {
-            const qty = Number(item.sizes[s]) || 0;
+            const qtyVal = item.sizes[s];
+            const qty = (typeof qtyVal === 'number') ? qtyVal : 0;
             const current = sizeTotals[s] || 0;
             sizeTotals[s] = current + qty;
         });

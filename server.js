@@ -14,10 +14,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Configuração da conexão com Banco de Dados
-const isProduction = !!process.env.DB_HOST; // Se tem host configurado, é produção/nuvem
+// O MariaDB é compatível com o protocolo MySQL, então usamos a biblioteca 'mysql2'.
+const isProduction = !!process.env.DB_HOST; 
 
 const dbConfig = {
     host: process.env.DB_HOST || '127.0.0.1', 
+    // A porta padrão do MariaDB também é 3306 (igual ao MySQL)
     port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
     user: process.env.DB_USER || 'root',      
     password: process.env.DB_PASSWORD || '',      
@@ -27,7 +29,7 @@ const dbConfig = {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    // CRÍTICO: Bancos na nuvem (TiDB, Aiven, Azure) exigem SSL
+    // Configuração SSL para bancos na nuvem (TiDB, Aiven, Azure MariaDB, etc)
     ssl: isProduction ? { rejectUnauthorized: false } : undefined
 };
 
@@ -42,6 +44,8 @@ app.use((req, res, next) => {
 
 let pool;
 
+// SQL compatível com MariaDB 10.2+ e MySQL 5.7+
+// O tipo JSON no MariaDB é um alias para LONGTEXT com validação JSON automática.
 const CREATE_TABLES_SQL = `
     CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
@@ -115,23 +119,20 @@ async function initDB() {
     try {
         if (isProduction) {
              console.log('☁️  Ambiente de Nuvem detectado.');
-             console.log(`📡 Conectando ao MySQL em ${dbConfig.host}...`);
+             console.log(`📡 Conectando ao MariaDB/MySQL em ${dbConfig.host}...`);
              
-             // Na nuvem, conectamos direto ao banco fornecido
              pool = mysql.createPool(dbConfig);
              
-             // Testar conexão
              await pool.query('SELECT 1');
              console.log('✅ Conexão estabelecida com sucesso.');
              
-             // Criar Tabelas
              await pool.query(CREATE_TABLES_SQL);
              console.log('✅ Tabelas verificadas/criadas.');
              return;
         }
 
-        // --- AMBIENTE LOCAL (XAMPP) ---
-        console.log('🏠 Ambiente Local detectado (XAMPP).');
+        // --- AMBIENTE LOCAL ---
+        console.log('🏠 Ambiente Local detectado.');
         
         const { database, ...configWithoutDb } = dbConfig;
         
@@ -143,7 +144,7 @@ async function initDB() {
         // 2. Cria tabelas
         await connection.query(CREATE_TABLES_SQL);
         
-        // 3. Verifica migração min_stock (apenas local precisa dessa checagem manual geralmente)
+        // 3. Verifica migração min_stock
         try {
             await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
@@ -151,7 +152,7 @@ async function initDB() {
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
         }
 
-        console.log('✅ Banco de dados Local configurado.');
+        console.log('✅ Banco de dados MariaDB/MySQL Local configurado.');
         await connection.end();
 
         // 4. Cria o pool oficial
@@ -160,6 +161,7 @@ async function initDB() {
     } catch (err) {
         console.error('\n❌ ERRO DE CONEXÃO COM BANCO DE DADOS:');
         console.error(err.message);
+        console.error('Dica: Verifique se o MariaDB está rodando na porta 3306 e se a senha do root está correta.');
     }
 }
 
