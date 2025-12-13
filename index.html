@@ -8,37 +8,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-      body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-      
-      @media print {
-        .no-print { display: none !important; }
-        .print-only { display: block !important; }
-        body { background-color: white; }
-        /* Margem reduzida para 5mm (Modo Estreito) para caber mais itens */
-        @page { margin: 5mm; size: A4; }
-      }
-      .print-only { display: none; }
-    </style>
-<!-- 
-    NOTA: Para rodar este projeto:
-    1. Certifique-se que o XAMPP (MySQL) está ligado (botão Start verde).
-    2. Instale dependências: npm install
-    3. Inicie o sistema: npm start
--->
+    <!-- Estilos movidos para index.css para corrigir erro de build do Vite -->
 <script type="importmap">
 {
   "imports": {
-    "recharts": "https://esm.sh/recharts@^3.5.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
-    "vite": "https://esm.sh/vite@^7.2.7",
-    "cors": "https://esm.sh/cors@^2.8.5",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "express": "https://esm.sh/express@^5.2.1",
     "mysql2/": "https://esm.sh/mysql2@^3.15.3/",
-    "express": "https://esm.sh/express@^5.2.1"
+    "cors": "https://esm.sh/cors@^2.8.5",
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>

@@ -1,0 +1,10 @@
+body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+
+@media print {
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  body { background-color: white; }
+  /* Margem reduzida para 5mm (Modo Estreito) para caber mais itens */
+  @page { margin: 5mm; size: A4; }
+}
+.print-only { display: none; }
