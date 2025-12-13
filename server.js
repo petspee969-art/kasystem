@@ -1,8 +1,8 @@
-
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 // Configuração para __dirname em ES Modules
@@ -38,7 +38,10 @@ app.use(express.json());
 
 // Middleware de Log
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    // Ignora logs de arquivos estáticos para limpar o terminal
+    if (!req.url.includes('.')) {
+        console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    }
     next();
 });
 
@@ -399,7 +402,24 @@ app.post('/api/config', async (req, res) => {
 
 // --- ROTA CATCH-ALL (PARA REACT ROUTER) ---
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    // Verifica se o build existe antes de tentar enviar
+    const indexPath = path.join(__dirname, 'dist', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send(`
+            <div style="font-family: sans-serif; padding: 20px; text-align: center;">
+                <h1>⚠️ Frontend não encontrado</h1>
+                <p>Você rodou <code>npm start</code>, mas a pasta <code>dist</code> não existe.</p>
+                <hr/>
+                <h3>Como resolver:</h3>
+                <p>1. Para <strong>DESENVOLVIMENTO</strong> (recomendado agora):</p>
+                <pre style="background: #eee; padding: 10px; display: inline-block; border-radius: 5px;">npm run dev</pre>
+                <p>2. Para <strong>PRODUÇÃO</strong>:</p>
+                <pre style="background: #eee; padding: 10px; display: inline-block; border-radius: 5px;">npm run build\nnpm start</pre>
+            </div>
+        `);
+    }
 });
 
 app.listen(PORT, () => {
