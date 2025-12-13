@@ -1,3 +1,4 @@
+import 'dotenv/config'; // Carrega variáveis do arquivo .env
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -121,7 +122,7 @@ const CREATE_TABLES_SQL = `
 async function initDB() {
     try {
         if (isProduction) {
-             console.log('☁️  Ambiente de Nuvem detectado.');
+             console.log('☁️  Ambiente de Nuvem / VPS detectado.');
              console.log(`📡 Conectando ao MariaDB/MySQL em ${dbConfig.host}...`);
              
              pool = mysql.createPool(dbConfig);
