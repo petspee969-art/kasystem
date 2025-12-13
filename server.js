@@ -11,11 +11,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// Render ou Hostinger fornecem a porta via process.env.PORT
 const PORT = process.env.PORT || 3001;
 
 // Configuração da conexão com Banco de Dados
-// Se DB_HOST for definido mas for localhost, tratamos como ambiente "controlável" para criar o banco
 const isCloudDatabase = !!process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost';
 
 const dbConfig = {
@@ -29,14 +27,13 @@ const dbConfig = {
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
-    // Configuração SSL apenas se for banco na nuvem (AWS RDS, Azure, etc)
     ssl: isCloudDatabase ? { rejectUnauthorized: false } : undefined
 };
 
 app.use(cors());
 app.use(express.json());
 
-// Middleware de Log
+// Middleware de Log Simples
 app.use((req, res, next) => {
     if (!req.url.includes('.')) {
         console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -45,6 +42,7 @@ app.use((req, res, next) => {
 });
 
 let pool;
+let dbError = null; // Armazena o erro de conexão para mostrar no navegador
 
 const CREATE_TABLES_SQL = `
     CREATE TABLE IF NOT EXISTS users (
@@ -117,21 +115,22 @@ const CREATE_TABLES_SQL = `
 
 async function initDB() {
     try {
+        console.log('🔄 Tentando conectar ao banco de dados...');
+        console.log(`   Host: ${dbConfig.host}`);
+        console.log(`   User: ${dbConfig.user}`);
+        
         if (isCloudDatabase) {
-             console.log('☁️  Banco de Dados Externo detectado.');
              pool = mysql.createPool(dbConfig);
              await pool.query('SELECT 1');
-             console.log('✅ Conexão estabelecida.');
+             console.log('✅ Conexão Nuvem estabelecida.');
              await pool.query(CREATE_TABLES_SQL);
              return;
         }
 
-        // --- AMBIENTE LOCAL OU VPS (Localhost) ---
-        console.log('🏠 Configurando Banco de Dados Local/VPS...');
-        
+        // AMBIENTE LOCAL/VPS
         const { database, ...configWithoutDb } = dbConfig;
         
-        // 1. Conecta sem especificar o banco para poder criá-lo
+        // 1. Tenta conectar sem banco específico (para criar se não existir)
         const connection = await mysql.createConnection(configWithoutDb);
         await connection.query(`CREATE DATABASE IF NOT EXISTS ${database}`);
         await connection.query(`USE ${database}`);
@@ -139,7 +138,7 @@ async function initDB() {
         // 2. Cria tabelas
         await connection.query(CREATE_TABLES_SQL);
         
-        // 3. Migrações (se necessário)
+        // 3. Migrações
         try {
             await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
@@ -147,16 +146,17 @@ async function initDB() {
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
         }
 
-        console.log('✅ Banco de dados configurado com sucesso.');
+        console.log('✅ Banco de dados LOCAL configurado e tabelas criadas!');
         await connection.end();
 
         // 4. Cria o pool oficial
         pool = mysql.createPool(dbConfig);
+        dbError = null;
 
     } catch (err) {
-        console.error('\n❌ ERRO DE CONEXÃO COM BANCO DE DADOS:');
+        console.error('\n❌ ERRO CRÍTICO DE BANCO DE DADOS:');
         console.error(err.message);
-        console.error('Dica: Verifique se o MariaDB está rodando e se a senha no arquivo .env está correta.');
+        dbError = err.message; // Guarda o erro para mostrar na tela
     }
 }
 
@@ -165,7 +165,10 @@ initDB();
 // Middleware de Banco
 app.use((req, res, next) => {
     if (!pool) {
-        return res.status(500).json({ error: 'Banco de dados desconectado ou iniciando...' });
+        return res.status(500).json({ 
+            error: 'Erro de conexão com Banco de Dados', 
+            details: dbError || 'Iniciando conexão...' 
+        });
     }
     next();
 });
