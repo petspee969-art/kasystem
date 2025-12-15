@@ -24,8 +24,25 @@ const getMySQLDate = () => {
 
 const handleResponse = async (res: Response) => {
     if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error || 'Erro na requisição');
+        // CORREÇÃO TELA BRANCA: Lê o texto uma única vez
+        const textBody = await res.text();
+        let errorMessage = res.statusText;
+        
+        try {
+            // Tenta fazer parse do texto como JSON
+            const errJson = JSON.parse(textBody);
+            if (errJson && errJson.error) errorMessage = errJson.error;
+        } catch (e) {
+            // Se falhar o parse, usa o texto puro (pode ser erro HTML do servidor)
+            if (textBody) errorMessage = textBody;
+        }
+        
+        // Se for erro de HTML grande, corta para não poluir
+        if (errorMessage.startsWith('<') && errorMessage.length > 200) {
+            errorMessage = `Erro no servidor (Código ${res.status}). Verifique o terminal do backend.`;
+        }
+
+        throw new Error(errorMessage || 'Erro na requisição ao servidor');
     }
     return res.json();
 };
@@ -435,6 +452,7 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
   // CORREÇÃO: Formata a data para MySQL (remove T e Z)
   const formattedCreatedAt = getMySQLDate();
 
+  // Objeto completo com chaves snake_case para enviar à API
   const dbOrder = {
     id: orderWithSeq.id,
     display_id: orderWithSeq.displayId,
@@ -446,11 +464,11 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
     client_name: orderWithSeq.clientName,
     client_city: orderWithSeq.clientCity,
     client_state: orderWithSeq.clientState,
-    created_at: formattedCreatedAt, // USA DATA FORMATADA
-    delivery_date: orderWithSeq.deliveryDate || null, // CORREÇÃO: Envia NULL se string vazia
+    created_at: formattedCreatedAt,
+    delivery_date: orderWithSeq.deliveryDate || null, 
     payment_method: orderWithSeq.paymentMethod,
     status: orderWithSeq.status,
-    items: orderWithSeq.items, 
+    items: orderWithSeq.items, // O Server irá fazer stringify
     total_pieces: orderWithSeq.totalPieces,
     subtotal_value: orderWithSeq.subtotalValue,
     discount_type: orderWithSeq.discountType,
@@ -475,7 +493,7 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
 
 // ATUALIZAÇÃO COMPLETA DE PEDIDO (Para edição do Representante)
 export const updateOrderFull = async (orderId: string, updatedData: Partial<Order>): Promise<void> => {
-    // 1. Busca o pedido antigo para reverter estoque
+    // 1. Busca o pedido antigo
     const res = await fetch(`${API_URL}/orders/${orderId}`);
     const oldOrder = await handleResponse(res);
     const oldItems = typeof oldOrder.items === 'string' ? JSON.parse(oldOrder.items) : oldOrder.items;
@@ -490,16 +508,90 @@ export const updateOrderFull = async (orderId: string, updatedData: Partial<Orde
         if (exists) throw new Error(`O Romaneio nº ${updatedData.romaneio} já existe.`);
     }
 
-    // 3. Reverte o estoque dos itens antigos (Devolve para o estoque)
+    // 3. Reverte o estoque dos itens antigos (Devolve para o estoque - APENAS para EnforceStock=true)
     await updateStockOnOrderCreation(oldItems, true);
 
-    // 4. Salva o pedido atualizado
+    // --- LÓGICA DE FUSÃO: Preserva 'picked' (separação) e ajusta estoque se houver redução ---
+    // Busca produtos para saber se são de estoque travado ou livre
+    const allProducts = await getProducts();
+    
+    if (updatedData.items && Array.isArray(updatedData.items)) {
+        const mergedItems: OrderItem[] = [];
+
+        // Processa item por item sequencialmente
+        for (const newItem of updatedData.items) {
+            const matchingOldItem = oldItems.find((oi: OrderItem) =>
+                oi.reference === newItem.reference && oi.color === newItem.color
+            );
+
+            // Se o item já existia e tinha separação (picked)
+            if (matchingOldItem && matchingOldItem.picked) {
+                const preservedPicked = { ...matchingOldItem.picked };
+                const product = allProducts.find(p => p.reference === newItem.reference && p.color === newItem.color);
+                
+                let stockUpdateNeeded = false;
+                const stockToUpdate = product ? { ...product.stock } : {};
+
+                // Verifica se a quantidade pedida DIMINUIU abaixo do que já estava separado
+                for (const size of Object.keys(preservedPicked)) {
+                    const pickedQty = preservedPicked[size];
+                    const requestedQty = newItem.sizes[size] || 0;
+
+                    if (pickedQty > requestedQty) {
+                        // Ex: Pediu 2, Separou 2. Agora mudou pedido para 1.
+                        // Surplus (Sobra) = 2 - 1 = 1.
+                        const surplus = pickedQty - requestedQty;
+                        
+                        // Ajusta o 'picked' para o novo máximo (1)
+                        preservedPicked[size] = requestedQty;
+
+                        // Se o produto NÃO tem estoque travado (enforceStock=false), 
+                        // significa que o estoque foi baixado na separação (Picking).
+                        // Precisamos DEVOLVER a sobra para o estoque.
+                        // (Se fosse travado, o passo 3 e 5 já resolveriam via 'sizes').
+                        if (product && !product.enforceStock) {
+                            stockToUpdate[size] = (stockToUpdate[size] || 0) + surplus;
+                            stockUpdateNeeded = true;
+                        }
+                    }
+                }
+
+                // Salva o retorno ao estoque se necessário
+                if (stockUpdateNeeded && product) {
+                    await updateProductInventory(
+                        product.id, 
+                        stockToUpdate, 
+                        product.enforceStock, 
+                        product.basePrice, 
+                        product.minStock
+                    );
+                    // Atualiza a ref local para consistência
+                    product.stock = stockToUpdate; 
+                }
+                
+                // Limpa chaves zeradas
+                Object.keys(preservedPicked).forEach(k => {
+                    if (preservedPicked[k] === 0) delete preservedPicked[k];
+                });
+
+                // Adiciona o item com o 'picked' preservado/ajustado
+                mergedItems.push({ ...newItem, picked: preservedPicked });
+            } else {
+                // Item novo ou sem separação anterior
+                mergedItems.push(newItem);
+            }
+        }
+        updatedData.items = mergedItems;
+    }
+    // --- FIM LÓGICA FUSÃO ---
+
+    // 4. Salva o pedido atualizado - Mapeamento Snake_case
     const dbOrderUpdate = {
         client_id: updatedData.clientId,
         client_name: updatedData.clientName,
         client_city: updatedData.clientCity,
         client_state: updatedData.clientState,
-        delivery_date: updatedData.deliveryDate || null, // CORREÇÃO: Envia NULL se string vazia
+        delivery_date: updatedData.deliveryDate || null, 
         payment_method: updatedData.paymentMethod,
         romaneio: updatedData.romaneio,
         items: updatedData.items,
@@ -516,7 +608,7 @@ export const updateOrderFull = async (orderId: string, updatedData: Partial<Orde
         body: JSON.stringify(dbOrderUpdate)
     });
 
-    // 5. Baixa o estoque dos novos itens
+    // 5. Baixa o estoque dos novos itens (APENAS para EnforceStock=true)
     if (updatedData.items) {
         await updateStockOnOrderCreation(updatedData.items, false);
     }

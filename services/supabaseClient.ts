@@ -1,13 +1,22 @@
 
-// Verifica se estamos rodando em produção (buildado pelo Vite)
-// @ts-ignore
-const isProduction = import.meta.env.PROD;
+// Detecta URL da API baseado no ambiente
+// Se estiver no Vite (porta 5173), aponta para o servidor Node na 3001.
+// Se estiver em produção (mesmo domínio) ou servido pelo Node, usa caminho relativo.
 
-// Em produção (nuvem), usamos caminho relativo '/api' para que o navegador use o mesmo domínio do site.
-// Em desenvolvimento local, apontamos para o servidor Node fixo.
-export const API_URL = isProduction ? '/api' : 'http://127.0.0.1:3001/api';
+const getApiUrl = () => {
+    if (typeof window !== 'undefined') {
+        if (window.location.port === '5173') {
+            return 'http://127.0.0.1:3001/api';
+        }
+    }
+    // Fallback seguro para produção ou mesma porta (caminho relativo)
+    return '/api';
+};
 
-// Mantemos um objeto vazio 'supabase' apenas para compatibilidade de tipos
+export const API_URL = getApiUrl();
+
+// Mantemos um objeto vazio 'supabase' apenas para compatibilidade de tipos, 
+// caso o código antigo ainda o referencie.
 export const supabase = {
     channel: () => ({
         on: () => ({
