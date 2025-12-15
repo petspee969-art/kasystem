@@ -170,6 +170,29 @@ async function initDB() {
             await connection.query(`ALTER TABLE clients ADD COLUMN mobile VARCHAR(20);`);
         }
 
+        // 3. Colunas da Tabela Orders (Garantia de integridade)
+        try {
+            await connection.query(`SELECT romaneio FROM orders LIMIT 1;`);
+        } catch (e) {
+            console.log("⚠️ Coluna 'romaneio' não encontrada em orders. Criando...");
+            await connection.query(`ALTER TABLE orders ADD COLUMN romaneio VARCHAR(50);`);
+        }
+        try {
+            await connection.query(`SELECT is_partial FROM orders LIMIT 1;`);
+        } catch (e) {
+            console.log("⚠️ Coluna 'is_partial' não encontrada em orders. Criando...");
+            await connection.query(`ALTER TABLE orders ADD COLUMN is_partial BOOLEAN DEFAULT 0;`);
+        }
+        try {
+            await connection.query(`SELECT final_total_value FROM orders LIMIT 1;`);
+        } catch (e) {
+            console.log("⚠️ Coluna 'final_total_value' não encontrada em orders. Criando...");
+            await connection.query(`ALTER TABLE orders ADD COLUMN final_total_value DECIMAL(10, 2);`);
+            await connection.query(`ALTER TABLE orders ADD COLUMN subtotal_value DECIMAL(10, 2);`);
+            await connection.query(`ALTER TABLE orders ADD COLUMN discount_type VARCHAR(20);`);
+            await connection.query(`ALTER TABLE orders ADD COLUMN discount_value DECIMAL(10, 2);`);
+        }
+
         connection.release();
         console.log('✅ Banco de dados configurado e tabelas verificadas!');
         dbError = null;

@@ -447,7 +447,7 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
     client_city: orderWithSeq.clientCity,
     client_state: orderWithSeq.clientState,
     created_at: formattedCreatedAt, // USA DATA FORMATADA
-    delivery_date: orderWithSeq.deliveryDate,
+    delivery_date: orderWithSeq.deliveryDate || null, // CORREÇÃO: Envia NULL se string vazia
     payment_method: orderWithSeq.paymentMethod,
     status: orderWithSeq.status,
     items: orderWithSeq.items, 
@@ -499,7 +499,7 @@ export const updateOrderFull = async (orderId: string, updatedData: Partial<Orde
         client_name: updatedData.clientName,
         client_city: updatedData.clientCity,
         client_state: updatedData.clientState,
-        delivery_date: updatedData.deliveryDate,
+        delivery_date: updatedData.deliveryDate || null, // CORREÇÃO: Envia NULL se string vazia
         payment_method: updatedData.paymentMethod,
         romaneio: updatedData.romaneio,
         items: updatedData.items,
