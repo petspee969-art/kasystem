@@ -17,6 +17,11 @@ export const generateUUID = () => {
   });
 };
 
+// Helper para formatar data compatível com MySQL (YYYY-MM-DD HH:mm:ss)
+const getMySQLDate = () => {
+    return new Date().toISOString().slice(0, 19).replace('T', ' ');
+};
+
 const handleResponse = async (res: Response) => {
     if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -85,21 +90,9 @@ export const addProduct = async (prod: ProductDef): Promise<void> => {
 };
 
 export const updateProductInventory = async (id: string, newStock: any, enforceStock: boolean, basePrice: number, minStock: any = null): Promise<void> => {
-    // Se minStock não for passado (em chamadas antigas ou updates parciais), buscamos o atual?
-    // Para simplificar, a API espera o objeto completo ou faz merge. No backend atual (PUT), substituimos tudo.
-    // Portanto, o frontend deve passar o minStock atual se não quiser alterá-lo.
-    
-    // NOTA: Se minStock for null, a API pode falhar se não tratada.
-    // O ideal é que quem chama essa função passe o minStock.
-    // Se a chamada vier de um lugar que não sabe o minStock (ex: vendas), precisamos lidar com isso.
-    
-    // Melhor abordagem aqui para Vendas: Se minStock for undefined/null, precisamos ler do produto atual antes de salvar?
-    // O endpoint PUT no server.js espera todos os campos.
-    
     let finalMinStock = minStock;
     if (!finalMinStock) {
-        // Se não fornecido, busca o produto atual para preservar o minStock
-        const res = await fetch(`${API_URL}/products`); // Ineficiente mas seguro para este arquitetura local
+        const res = await fetch(`${API_URL}/products`); 
         const all = await handleResponse(res);
         const current = all.find((p:any) => p.id === id);
         finalMinStock = current ? (current.min_stock || {}) : {};
@@ -126,7 +119,6 @@ export const updateStockOnOrderCreation = async (items: OrderItem[], reverse: bo
     const currentProducts = await getProducts();
 
     for (const item of items) {
-        // Se for SORTIDO, não mexe no estoque na criação/edição (será resolvido na separação)
         if (item.color === 'SORTIDO') continue;
 
         const product = currentProducts.find(
@@ -140,9 +132,9 @@ export const updateStockOnOrderCreation = async (items: OrderItem[], reverse: bo
             Object.entries(item.sizes).forEach(([size, qty]) => {
                 const currentQty = newStock[size] || 0;
                 if (reverse) {
-                    newStock[size] = currentQty + qty; // Devolve ao estoque
+                    newStock[size] = currentQty + qty; 
                 } else {
-                    newStock[size] = currentQty - qty; // Tira do estoque
+                    newStock[size] = currentQty - qty; 
                 }
                 changed = true;
             });
@@ -155,7 +147,6 @@ export const updateStockOnOrderCreation = async (items: OrderItem[], reverse: bo
 };
 
 export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], newItems: OrderItem[]): Promise<Order> => {
-    // 1. Busca pedido atual
     const res = await fetch(`${API_URL}/orders/${orderId}`);
     const currentOrder = await handleResponse(res);
     
@@ -163,7 +154,6 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
         throw new Error("Este pedido já possui Romaneio (Finalizado). Não é possível alterar itens ou estoque.");
     }
 
-    // 2. Recalcula totais
     let newTotalPieces = 0;
     let newSubtotalValue = 0;
 
@@ -193,7 +183,6 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
 
     const newFinalValue = Math.max(0, newSubtotalValue - discountAmount);
 
-    // 4. Atualiza o Pedido
     const updateRes = await fetch(`${API_URL}/orders/${orderId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -206,7 +195,6 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
     });
     const updatedRow = await handleResponse(updateRes);
     
-    // 5. Calcula diferença e atualiza estoque
     const currentProducts = await getProducts();
     const processedKeys = new Set<string>();
     const getKey = (ref: string, color: string) => `${ref}:::${color}`;
@@ -222,7 +210,6 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
 
     for (const key of processedKeys) {
         const [ref, color] = key.split(':::');
-        // Ignora SORTIDO no controle de estoque fino
         if (color === 'SORTIDO') continue;
 
         const oldItem = oldMap[key];
@@ -269,7 +256,6 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
         }
     }
 
-    // Retorna formatado
     return formatOrder(updatedRow);
 };
 
@@ -312,7 +298,9 @@ export const getClients = async (repId?: string): Promise<Client[]> => {
     name: row.name,
     city: row.city,
     neighborhood: row.neighborhood,
-    state: row.state
+    state: row.state,
+    cpfCnpj: row.cpf_cnpj, 
+    mobile: row.mobile 
   }));
 };
 
@@ -323,7 +311,9 @@ export const addClient = async (client: Client): Promise<void> => {
     name: client.name,
     city: client.city,
     neighborhood: client.neighborhood,
-    state: client.state
+    state: client.state,
+    cpf_cnpj: client.cpfCnpj, 
+    mobile: client.mobile 
   };
   await fetch(`${API_URL}/clients`, {
       method: 'POST',
@@ -338,7 +328,9 @@ export const updateClient = async (updatedClient: Client): Promise<void> => {
     name: updatedClient.name,
     city: updatedClient.city,
     neighborhood: updatedClient.neighborhood,
-    state: updatedClient.state
+    state: updatedClient.state,
+    cpf_cnpj: updatedClient.cpfCnpj, 
+    mobile: updatedClient.mobile 
   };
   await fetch(`${API_URL}/clients/${updatedClient.id}`, {
       method: 'PUT',
@@ -440,6 +432,9 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
 
   const orderWithSeq = { ...order, displayId: newSeq };
 
+  // CORREÇÃO: Formata a data para MySQL (remove T e Z)
+  const formattedCreatedAt = getMySQLDate();
+
   const dbOrder = {
     id: orderWithSeq.id,
     display_id: orderWithSeq.displayId,
@@ -451,7 +446,7 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
     client_name: orderWithSeq.clientName,
     client_city: orderWithSeq.clientCity,
     client_state: orderWithSeq.clientState,
-    created_at: orderWithSeq.createdAt,
+    created_at: formattedCreatedAt, // USA DATA FORMATADA
     delivery_date: orderWithSeq.deliveryDate,
     payment_method: orderWithSeq.paymentMethod,
     status: orderWithSeq.status,
@@ -475,7 +470,7 @@ export const addOrder = async (order: Omit<Order, 'displayId'>): Promise<Order |
       console.error("Pedido salvo, mas erro ao atualizar estoque:", err);
   }
 
-  return orderWithSeq as Order;
+  return { ...orderWithSeq, createdAt: formattedCreatedAt } as Order;
 };
 
 // ATUALIZAÇÃO COMPLETA DE PEDIDO (Para edição do Representante)
@@ -528,19 +523,12 @@ export const updateOrderFull = async (orderId: string, updatedData: Partial<Orde
 };
 
 export const deleteOrder = async (orderId: string): Promise<void> => {
-    // 1. Busca detalhes do pedido (precisa dos itens para devolver ao estoque)
     const res = await fetch(`${API_URL}/orders/${orderId}`);
     const rawOrder = await handleResponse(res);
-    
-    // Normaliza os itens se vierem como string
     const items: OrderItem[] = typeof rawOrder.items === 'string' ? JSON.parse(rawOrder.items) : rawOrder.items;
-
-    // 2. Busca catálogo de produtos para saber quais têm estoque travado vs livre
     const allProducts = await getProducts();
 
-    // 3. Devolve estoque
     for (const item of items) {
-        // Ignora itens puramente descritivos que não tem referência válida
         if (!item.reference) continue;
 
         const product = allProducts.find(p => p.reference === item.reference && p.color === item.color);
@@ -558,12 +546,8 @@ export const deleteOrder = async (orderId: string): Promise<void> => {
                 let qtyToRestore = 0;
 
                 if (product.enforceStock) {
-                    // Se o estoque é travado, o que foi baixado foi a Quantidade PEDIDA (sizes)
-                    // Devolvemos o que foi pedido.
                     qtyToRestore = item.sizes[size] || 0;
                 } else {
-                    // Se o estoque é livre, o que foi baixado foi a Quantidade SEPARADA (picked)
-                    // Devolvemos apenas o que foi fisicamente separado.
                     qtyToRestore = item.picked?.[size] || 0;
                 }
 
@@ -579,7 +563,6 @@ export const deleteOrder = async (orderId: string): Promise<void> => {
         }
     }
 
-    // 4. Deleta o registro do pedido
     await fetch(`${API_URL}/orders/${orderId}`, { method: 'DELETE' });
 };
 

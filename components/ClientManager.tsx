@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Client } from '../types';
 import { getClients, addClient, updateClient, deleteClient, generateUUID } from '../services/storageService';
-import { Plus, MapPin, Store, Edit2, Trash, Save, X, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, MapPin, Store, Edit2, Trash, Save, X, Loader2, AlertCircle, Phone, FileText } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -15,7 +15,7 @@ const ClientManager: React.FC<Props> = ({ user }) => {
   const [errorMsg, setErrorMsg] = useState('');
   
   const [form, setForm] = useState({
-    name: '', city: '', neighborhood: '', state: ''
+    name: '', city: '', neighborhood: '', state: '', cpfCnpj: '', mobile: ''
   });
 
   const fetchClients = async () => {
@@ -52,7 +52,7 @@ const ClientManager: React.FC<Props> = ({ user }) => {
           });
       }
       await fetchClients();
-      setForm({ name: '', city: '', neighborhood: '', state: '' });
+      setForm({ name: '', city: '', neighborhood: '', state: '', cpfCnpj: '', mobile: '' });
     } catch (error: any) {
       console.error("Erro ao salvar:", error);
       // Exibe a mensagem real do erro
@@ -70,7 +70,9 @@ const ClientManager: React.FC<Props> = ({ user }) => {
         name: client.name,
         city: client.city,
         neighborhood: client.neighborhood,
-        state: client.state
+        state: client.state,
+        cpfCnpj: client.cpfCnpj || '',
+        mobile: client.mobile || ''
     });
     setEditingId(client.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -106,7 +108,7 @@ const ClientManager: React.FC<Props> = ({ user }) => {
 
   const handleCancel = () => {
     setEditingId(null);
-    setForm({ name: '', city: '', neighborhood: '', state: '' });
+    setForm({ name: '', city: '', neighborhood: '', state: '', cpfCnpj: '', mobile: '' });
     setErrorMsg('');
   };
 
@@ -141,7 +143,7 @@ const ClientManager: React.FC<Props> = ({ user }) => {
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Loja / Cliente</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Loja / Cliente *</label>
                 <input 
                     required
                     className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
@@ -151,8 +153,37 @@ const ClientManager: React.FC<Props> = ({ user }) => {
                     disabled={loading}
                 />
             </div>
+
+            {/* NOVOS CAMPOS */}
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">CPF ou CNPJ</label>
+                <div className="relative">
+                    <FileText className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <input 
+                        className="w-full border p-2 pl-9 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={form.cpfCnpj}
+                        onChange={e => setForm({...form, cpfCnpj: e.target.value})}
+                        placeholder="000.000.000-00"
+                        disabled={loading}
+                    />
+                </div>
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Celular / WhatsApp</label>
+                <div className="relative">
+                    <Phone className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                    <input 
+                        className="w-full border p-2 pl-9 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={form.mobile}
+                        onChange={e => setForm({...form, mobile: e.target.value})}
+                        placeholder="(00) 90000-0000"
+                        disabled={loading}
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cidade *</label>
                 <input 
                     required
                     className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
@@ -162,7 +193,7 @@ const ClientManager: React.FC<Props> = ({ user }) => {
                 />
             </div>
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estado (UF) *</label>
                 <input 
                     required
                     className="w-full border p-2 rounded uppercase focus:ring-2 focus:ring-blue-500 outline-none"
@@ -173,8 +204,8 @@ const ClientManager: React.FC<Props> = ({ user }) => {
                     disabled={loading}
                 />
             </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bairro *</label>
                 <input 
                     required
                     className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
@@ -212,6 +243,24 @@ const ClientManager: React.FC<Props> = ({ user }) => {
                  <div className="flex justify-between items-start">
                     <div>
                         <h4 className="font-bold text-lg text-gray-800">{client.name}</h4>
+                        
+                        {(client.cpfCnpj || client.mobile) && (
+                            <div className="flex flex-col text-xs text-gray-600 mt-2 mb-2 gap-1">
+                                {client.mobile && (
+                                    <div className="flex items-center">
+                                        <Phone className="w-3 h-3 mr-1 text-green-600" />
+                                        <span>{client.mobile}</span>
+                                    </div>
+                                )}
+                                {client.cpfCnpj && (
+                                    <div className="flex items-center">
+                                        <FileText className="w-3 h-3 mr-1 text-blue-600" />
+                                        <span>{client.cpfCnpj}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex items-center text-gray-500 mt-2">
                             <MapPin className="w-4 h-4 mr-1" />
                             <span className="text-sm">{client.city} - {client.state}</span>

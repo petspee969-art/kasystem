@@ -73,7 +73,9 @@ const CREATE_TABLES_SQL = `
         name VARCHAR(100),
         city VARCHAR(100),
         neighborhood VARCHAR(100),
-        state VARCHAR(2)
+        state VARCHAR(2),
+        cpf_cnpj VARCHAR(20),
+        mobile VARCHAR(20)
     );
 
     CREATE TABLE IF NOT EXISTS orders (
@@ -143,12 +145,29 @@ async function initDB() {
         const connection = await pool.getConnection();
         await connection.query(CREATE_TABLES_SQL);
         
-        // Migrações de segurança (adicionar colunas se faltarem)
+        // --- MIGRAÇÕES AUTOMÁTICAS ---
+        
+        // 1. Min Stock
         try {
             await connection.query(`SELECT min_stock FROM products LIMIT 1;`);
         } catch (e) {
-            console.log("⚠️ Coluna 'min_stock' não encontrada. Criando...");
+            console.log("⚠️ Coluna 'min_stock' não encontrada em products. Criando...");
             await connection.query(`ALTER TABLE products ADD COLUMN min_stock JSON;`);
+        }
+
+        // 2. CPF/CNPJ e Celular em Clients
+        try {
+            await connection.query(`SELECT cpf_cnpj FROM clients LIMIT 1;`);
+        } catch (e) {
+            console.log("⚠️ Coluna 'cpf_cnpj' não encontrada em clients. Criando...");
+            await connection.query(`ALTER TABLE clients ADD COLUMN cpf_cnpj VARCHAR(20);`);
+        }
+        
+        try {
+            await connection.query(`SELECT mobile FROM clients LIMIT 1;`);
+        } catch (e) {
+            console.log("⚠️ Coluna 'mobile' não encontrada em clients. Criando...");
+            await connection.query(`ALTER TABLE clients ADD COLUMN mobile VARCHAR(20);`);
         }
 
         connection.release();
@@ -344,10 +363,18 @@ app.get('/api/orders/:id', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
     try {
         const data = req.body;
+        console.log('📦 Recebendo pedido:', data.id, data.client_name);
+        
         const dbOrder = { ...data, items: JSON.stringify(data.items) };
         await pool.query('INSERT INTO orders SET ?', dbOrder);
+        
+        console.log('✅ Pedido salvo com sucesso:', data.id);
         res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error('❌ Erro ao salvar pedido:', err.message);
+        console.error(err);
+        res.status(500).json({ error: err.message }); 
+    }
 });
 
 app.put('/api/orders/:id', async (req, res) => {

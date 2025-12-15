@@ -392,6 +392,8 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
             finalTotalValue
         };
 
+        console.log("Enviando pedido:", orderPayload); // DEBUG
+
         if (initialOrder) {
             // MODO EDIÇÃO
             await updateOrderFull(initialOrder.id, orderPayload);
@@ -400,7 +402,7 @@ const RepOrderForm: React.FC<Props> = ({ user, onOrderCreated, initialOrder }) =
             // MODO CRIAÇÃO
             await addOrder({
                 id: generateUUID(),
-                createdAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(), // Será formatado pelo storageService
                 isPartial: false,
                 ...orderPayload
             });

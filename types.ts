@@ -42,6 +42,8 @@ export interface Client {
   city: string;
   neighborhood: string;
   state: string;
+  cpfCnpj?: string; // NOVO
+  mobile?: string;  // NOVO
 }
 
 export interface OrderItem {
