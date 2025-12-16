@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Order, Client } from '../types';
 import { getOrders, getClients } from '../services/storageService';
@@ -92,6 +93,7 @@ const RepOrderList: React.FC<Props> = ({ user, onEditOrder }) => {
     const html = `
       <html>
         <head>
+          <meta charset="UTF-8" />
           <title>Pedido #${order.displayId} - ${BRANDING.companyName}</title>
           <script src="https://cdn.tailwindcss.com"></script>
           <style>

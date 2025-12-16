@@ -621,7 +621,7 @@ const AdminOrderList: React.FC = () => {
         updateOrderStatus(order.id, 'printed');
         const win = window.open('', '', 'height=700,width=900');
         if(win) {
-            win.document.write('<html><head><title>Imprimir Pedido</title>');
+            win.document.write('<html><head><meta charset="UTF-8" /><title>Imprimir Pedido</title>');
             win.document.write('<script src="https://cdn.tailwindcss.com"></script>');
             win.document.write('<style>@media print { .no-print { display: none; } body { -webkit-print-color-adjust: exact; margin: 5mm; } table { border-collapse: collapse; width: 100%; font-size: 10px; } th, td { border: 1px solid black; padding: 2px; } }</style>');
             win.document.write('</head><body class="bg-white">');
@@ -687,7 +687,7 @@ const AdminOrderList: React.FC = () => {
     });
 
     const html = `
-      <html><head><title>Lista de Produção - ${BRANDING.companyName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10px; } th, td { border: 1px solid black; padding: 2px; text-align: center; } th { background-color: #f3f4f6; font-weight: bold; } td.left { text-align: left; } .header { margin-bottom: 20px; border-bottom: 2px solid black; padding-bottom: 10px; } @media print { button { display: none; } }</style></head><body>
+      <html><head><meta charset="UTF-8" /><title>Lista de Produção - ${BRANDING.companyName}</title><script src="https://cdn.tailwindcss.com"></script><style>body { font-family: sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10px; } th, td { border: 1px solid black; padding: 2px; text-align: center; } th { background-color: #f3f4f6; font-weight: bold; } td.left { text-align: left; } .header { margin-bottom: 20px; border-bottom: 2px solid black; padding-bottom: 10px; } @media print { button { display: none; } }</style></head><body>
           <div class="header"><h1 class="text-2xl font-bold uppercase">Resumo de Produção</h1><p class="text-sm text-gray-600">${dateRange}</p><p class="text-sm">Pedidos Selecionados: <strong>${selectedOrderIds.size}</strong></p><p class="text-xs uppercase mt-1 text-gray-400">${BRANDING.companyName}</p></div>
           <table><thead><tr><th width="20%" class="left">Referência</th><th width="20%" class="left">Cor</th>${ALL_SIZES.map(s => `<th>${s}</th>`).join('')}<th width="10%">Total</th></tr></thead><tbody>${aggregatedItems.map(item => `<tr><td class="left font-bold">${item.reference}</td><td class="left uppercase">${item.color}</td>${ALL_SIZES.map(s => `<td>${item.sizes[s] ? `<strong>${item.sizes[s]}</strong>` : '-'}</td>`).join('')}<td class="font-bold bg-gray-50 text-base">${item.totalQty}</td></tr>`).join('')}</tbody><tfoot><tr class="bg-gray-100"><td colspan="2" class="left font-bold uppercase p-2">Totais por Tamanho</td>${ALL_SIZES.map(s => `<td>${(sizeTotals[s] as number) > 0 ? sizeTotals[s] : ''}</td>`).join('')}<td class="font-bold text-xl">${totalPieces}</td></tr></tfoot></table><script>window.onload = function() { window.print(); }</script></body></html>`;
     win.document.write(html);
