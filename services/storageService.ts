@@ -669,6 +669,15 @@ export const updateOrderRomaneio = async (id: string, romaneio: string): Promise
   });
 };
 
+// Nova função para atualizar para parcial sem erro de CORS/URL Hardcoded
+export const setOrderPartial = async (id: string): Promise<void> => {
+    await fetch(`${API_URL}/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_partial: 1, status: 'printed' }) 
+    });
+};
+
 export const updateOrderStatus = async (id: string, status: 'open' | 'printed'): Promise<void> => {
     await fetch(`${API_URL}/orders/${id}`, {
         method: 'PUT',
