@@ -279,14 +279,20 @@ export const saveOrderPicking = async (orderId: string, oldItems: OrderItem[], n
 
 // --- REP PRICES ---
 export const getRepPrices = async (repId: string): Promise<RepPrice[]> => {
-    const res = await fetch(`${API_URL}/rep_prices?rep_id=${repId}`);
-    const data = await handleResponse(res);
-    return data.map((d: any) => ({
-        id: d.id,
-        repId: d.rep_id,
-        reference: d.reference,
-        price: parseFloat(d.price)
-    }));
+    try {
+        const res = await fetch(`${API_URL}/rep_prices?rep_id=${repId}`);
+        const data = await handleResponse(res);
+        if (!Array.isArray(data)) return [];
+        return data.map((d: any) => ({
+            id: d.id,
+            repId: d.rep_id,
+            reference: d.reference,
+            price: parseFloat(d.price)
+        }));
+    } catch (e) {
+        console.warn("Falha ao buscar tabela de preços", e);
+        return [];
+    }
 };
 
 export const upsertRepPrice = async (priceData: RepPrice): Promise<void> => {
